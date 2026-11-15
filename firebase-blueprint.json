@@ -1,0 +1,119 @@
+{
+  "entities": {
+    "User": {
+      "collection": "users",
+      "fields": {
+        "userId": { "type": "string" },
+        "email": { "type": "string" },
+        "displayName": { "type": "string" },
+        "role": { "type": "string" },
+        "phone": { "type": "string" },
+        "createdAt": { "type": "timestamp" },
+        "updatedAt": { "type": "timestamp" }
+      }
+    },
+    "Appointment": {
+      "collection": "appointments",
+      "fields": {
+        "patientId": { "type": "string" },
+        "patientName": { "type": "string" },
+        "specialistId": { "type": "string" },
+        "specialistName": { "type": "string" },
+        "specialty": { "type": "string" },
+        "date": { "type": "string" },
+        "timeSlot": { "type": "string" },
+        "mode": { "type": "string" },
+        "status": { "type": "string" },
+        "notes": { "type": "string" },
+        "consultationFee": { "type": "number" },
+        "createdAt": { "type": "timestamp" },
+        "updatedAt": { "type": "timestamp" }
+      }
+    },
+    "AmbulanceRequest": {
+      "collection": "ambulance_requests",
+      "fields": {
+        "patientId": { "type": "string" },
+        "patientName": { "type": "string" },
+        "patientPhone": { "type": "string" },
+        "pickupAddress": { "type": "string" },
+        "emergencyType": { "type": "string" },
+        "ambulanceType": { "type": "string" },
+        "status": { "type": "string" },
+        "vehicleNumber": { "type": "string" },
+        "driverName": { "type": "string" },
+        "driverPhone": { "type": "string" },
+        "etaMinutes": { "type": "number" },
+        "hospitalDestination": { "type": "string" },
+        "createdAt": { "type": "timestamp" },
+        "updatedAt": { "type": "timestamp" }
+      }
+    },
+    "DiagnosticBooking": {
+      "collection": "diagnostic_bookings",
+      "fields": {
+        "patientId": { "type": "string" },
+        "patientName": { "type": "string" },
+        "centerName": { "type": "string" },
+        "testName": { "type": "string" },
+        "testCategory": { "type": "string" },
+        "scheduledDate": { "type": "string" },
+        "collectionType": { "type": "string" },
+        "status": { "type": "string" },
+        "resultSummary": { "type": "string" },
+        "abnormalFlag": { "type": "boolean" },
+        "cost": { "type": "number" },
+        "createdAt": { "type": "timestamp" },
+        "updatedAt": { "type": "timestamp" }
+      }
+    },
+    "InsuranceClaim": {
+      "collection": "insurance_claims",
+      "fields": {
+        "patientId": { "type": "string" },
+        "patientName": { "type": "string" },
+        "policyNumber": { "type": "string" },
+        "insuranceProvider": { "type": "string" },
+        "hospitalName": { "type": "string" },
+        "procedureName": { "type": "string" },
+        "claimedAmount": { "type": "number" },
+        "approvedAmount": { "type": "number" },
+        "status": { "type": "string" },
+        "claimType": { "type": "string" },
+        "documentReference": { "type": "string" },
+        "createdAt": { "type": "timestamp" },
+        "updatedAt": { "type": "timestamp" }
+      }
+    },
+    "MedicalRecord": {
+      "collection": "medical_records",
+      "fields": {
+        "patientId": { "type": "string" },
+        "title": { "type": "string" },
+        "category": { "type": "string" },
+        "doctorOrFacility": { "type": "string" },
+        "recordDate": { "type": "string" },
+        "summary": { "type": "string" },
+        "keyMetrics": { "type": "string" },
+        "fileType": { "type": "string" },
+        "createdAt": { "type": "timestamp" },
+        "updatedAt": { "type": "timestamp" }
+      }
+    },
+    "ChatMessage": {
+      "collection": "chat_messages",
+      "fields": {
+        "consultationId": { "type": "string" },
+        "senderId": { "type": "string" },
+        "senderName": { "type": "string" },
+        "senderRole": { "type": "string" },
+        "recipientId": { "type": "string" },
+        "recipientName": { "type": "string" },
+        "message": { "type": "string" },
+        "isRead": { "type": "boolean" },
+        "messageType": { "type": "string" },
+        "createdAt": { "type": "timestamp" }
+      }
+    }
+  }
+}

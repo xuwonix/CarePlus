@@ -1,0 +1,138 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // Users collection
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      allow write: if isOwner(userId);
+    }
+
+    // Appointments collection
+    match /appointments/{appointmentId} {
+      allow read: if isAuthenticated() && (
+        resource.data.patientId == request.auth.uid ||
+        resource.data.specialistId == request.auth.uid ||
+        request.auth.token.role == 'SPECIALIST'
+      );
+      allow create: if isAuthenticated() && (
+        request.resource.data.patientId == request.auth.uid ||
+        request.resource.data.specialistId == request.auth.uid
+      ) && isValidAppointment(request.resource.data);
+      allow update: if isAuthenticated() && (
+        resource.data.patientId == request.auth.uid ||
+        resource.data.specialistId == request.auth.uid
+      ) && isValidAppointment(request.resource.data);
+      allow delete: if isAuthenticated() && resource.data.patientId == request.auth.uid;
+    }
+
+    function isValidAppointment(data) {
+      return data.patientId is string &&
+             data.specialistId is string &&
+             data.date is string &&
+             data.timeSlot is string &&
+             data.status in ['SCHEDULED', 'COMPLETED', 'CANCELLED'];
+    }
+
+    // Ambulance requests
+    match /ambulance_requests/{requestId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() &&
+                    request.resource.data.patientId == request.auth.uid &&
+                    isValidAmbulanceRequest(request.resource.data);
+      allow update: if isAuthenticated();
+      allow delete: if isAuthenticated() && resource.data.patientId == request.auth.uid;
+    }
+
+    function isValidAmbulanceRequest(data) {
+      return data.patientId is string &&
+             data.pickupAddress is string &&
+             data.emergencyType is string &&
+             data.status in ['DISPATCHED', 'EN_ROUTE', 'ARRIVED', 'COMPLETED'];
+    }
+
+    // Diagnostic test bookings
+    match /diagnostic_bookings/{bookingId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() &&
+                    request.resource.data.patientId == request.auth.uid &&
+                    isValidDiagnosticBooking(request.resource.data);
+      allow update: if isAuthenticated();
+      allow delete: if isAuthenticated() && resource.data.patientId == request.auth.uid;
+    }
+
+    function isValidDiagnosticBooking(data) {
+      return data.patientId is string &&
+             data.testName is string &&
+             data.scheduledDate is string &&
+             data.status in ['BOOKED', 'SAMPLE_COLLECTED', 'RESULTS_READY'];
+    }
+
+    // Insurance claims
+    match /insurance_claims/{claimId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() &&
+                    request.resource.data.patientId == request.auth.uid &&
+                    isValidInsuranceClaim(request.resource.data);
+      allow update: if isAuthenticated();
+      allow delete: if isAuthenticated() && resource.data.patientId == request.auth.uid;
+    }
+
+    function isValidInsuranceClaim(data) {
+      return data.patientId is string &&
+             data.policyNumber is string &&
+             data.claimedAmount is number &&
+             data.status in ['SUBMITTED', 'UNDER_REVIEW', 'APPROVED', 'SETTLED'];
+    }
+
+    // Medical records (digital health locker)
+    match /medical_records/{recordId} {
+      allow read: if isAuthenticated() && resource.data.patientId == request.auth.uid;
+      allow create: if isAuthenticated() &&
+                    request.resource.data.patientId == request.auth.uid &&
+                    isValidMedicalRecord(request.resource.data);
+      allow update: if isAuthenticated() &&
+                    resource.data.patientId == request.auth.uid &&
+                    isValidMedicalRecord(request.resource.data);
+      allow delete: if isAuthenticated() && resource.data.patientId == request.auth.uid;
+    }
+
+    function isValidMedicalRecord(data) {
+      return data.patientId is string &&
+             data.title is string &&
+             data.category is string &&
+             data.recordDate is string;
+    }
+
+    // Secure consultation chat messages
+    match /chat_messages/{messageId} {
+      allow read: if isAuthenticated() && (
+        resource.data.senderId == request.auth.uid ||
+        resource.data.recipientId == request.auth.uid
+      );
+      allow create: if isAuthenticated() &&
+                    request.resource.data.senderId == request.auth.uid &&
+                    isValidChatMessage(request.resource.data);
+      allow update: if isAuthenticated() && (
+        resource.data.senderId == request.auth.uid ||
+        resource.data.recipientId == request.auth.uid
+      );
+      allow delete: if isAuthenticated() && resource.data.senderId == request.auth.uid;
+    }
+
+    function isValidChatMessage(data) {
+      return data.consultationId is string &&
+             data.senderId is string &&
+             data.recipientId is string &&
+             data.message is string;
+    }
+  }
+}

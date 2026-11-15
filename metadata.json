@@ -1,0 +1,6 @@
+{
+  "name": "CarePulse",
+  "description": "Comprehensive healthcare platform connecting patients with specialists, emergency ambulance, diagnostic labs, health insurance, procedure guides, and secure consultation messaging.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
