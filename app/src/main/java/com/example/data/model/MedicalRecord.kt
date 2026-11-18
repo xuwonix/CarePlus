@@ -9,12 +9,13 @@ import com.google.firebase.firestore.ServerTimestamp
 data class MedicalRecord(
     @DocumentId val id: String = "",
     val patientId: String = "",
+    val memberName: String = "Self",
     val title: String = "",
-    val category: String = "PRESCRIPTION", // PRESCRIPTION, LAB_REPORT, RADIOLOGY, DISCHARGE_SUMMARY, VACCINATION
+    val category: String = "PRESCRIPTION", // PRESCRIPTION, LAB_REPORT, RADIOLOGY, DISCHARGE_SUMMARY, VITALS
     val doctorOrFacility: String = "",
     val recordDate: String = "",
     val summary: String = "",
-    val keyMetrics: String = "", // e.g. "BP: 120/80 mmHg | Heart Rate: 72 bpm | Glucose: 94 mg/dL"
+    val keyMetrics: String = "",
     val fileType: String = "PDF",
     @ServerTimestamp val createdAt: Timestamp? = null,
     @ServerTimestamp val updatedAt: Timestamp? = null

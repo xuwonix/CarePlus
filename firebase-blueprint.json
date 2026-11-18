@@ -8,6 +8,30 @@
         "displayName": { "type": "string" },
         "role": { "type": "string" },
         "phone": { "type": "string" },
+        "age": { "type": "string" },
+        "gender": { "type": "string" },
+        "bloodGroup": { "type": "string" },
+        "allergies": { "type": "string" },
+        "chronicConditions": { "type": "string" },
+        "emergencyContactName": { "type": "string" },
+        "emergencyContactPhone": { "type": "string" },
+        "locationArea": { "type": "string" },
+        "savedAddress": { "type": "string" },
+        "createdAt": { "type": "timestamp" },
+        "updatedAt": { "type": "timestamp" }
+      }
+    },
+    "FamilyMember": {
+      "collection": "family_profiles",
+      "fields": {
+        "patientId": { "type": "string" },
+        "name": { "type": "string" },
+        "relationship": { "type": "string" },
+        "age": { "type": "string" },
+        "gender": { "type": "string" },
+        "bloodGroup": { "type": "string" },
+        "allergies": { "type": "string" },
+        "phone": { "type": "string" },
         "createdAt": { "type": "timestamp" },
         "updatedAt": { "type": "timestamp" }
       }
@@ -17,6 +41,7 @@
       "fields": {
         "patientId": { "type": "string" },
         "patientName": { "type": "string" },
+        "familyMemberName": { "type": "string" },
         "specialistId": { "type": "string" },
         "specialistName": { "type": "string" },
         "specialty": { "type": "string" },
@@ -26,6 +51,8 @@
         "status": { "type": "string" },
         "notes": { "type": "string" },
         "consultationFee": { "type": "number" },
+        "paymentStatus": { "type": "string" },
+        "paymentMethod": { "type": "string" },
         "createdAt": { "type": "timestamp" },
         "updatedAt": { "type": "timestamp" }
       }
@@ -54,17 +81,93 @@
       "fields": {
         "patientId": { "type": "string" },
         "patientName": { "type": "string" },
+        "familyMemberName": { "type": "string" },
         "centerName": { "type": "string" },
         "testName": { "type": "string" },
         "testCategory": { "type": "string" },
         "scheduledDate": { "type": "string" },
+        "scheduledTime": { "type": "string" },
         "collectionType": { "type": "string" },
+        "collectionAddress": { "type": "string" },
         "status": { "type": "string" },
         "resultSummary": { "type": "string" },
         "abnormalFlag": { "type": "boolean" },
         "cost": { "type": "number" },
+        "paymentStatus": { "type": "string" },
+        "paymentMethod": { "type": "string" },
         "createdAt": { "type": "timestamp" },
         "updatedAt": { "type": "timestamp" }
+      }
+    },
+    "HomeCareBooking": {
+      "collection": "home_care_bookings",
+      "fields": {
+        "patientId": { "type": "string" },
+        "patientName": { "type": "string" },
+        "memberName": { "type": "string" },
+        "serviceId": { "type": "string" },
+        "serviceTitle": { "type": "string" },
+        "serviceCategory": { "type": "string" },
+        "providerTeam": { "type": "string" },
+        "visitAddress": { "type": "string" },
+        "scheduledDate": { "type": "string" },
+        "timeWindow": { "type": "string" },
+        "notes": { "type": "string" },
+        "status": { "type": "string" },
+        "cost": { "type": "number" },
+        "paymentStatus": { "type": "string" },
+        "createdAt": { "type": "timestamp" },
+        "updatedAt": { "type": "timestamp" }
+      }
+    },
+    "PaymentRecord": {
+      "collection": "payments",
+      "fields": {
+        "patientId": { "type": "string" },
+        "title": { "type": "string" },
+        "providerName": { "type": "string" },
+        "category": { "type": "string" },
+        "billingForName": { "type": "string" },
+        "amount": { "type": "number" },
+        "paymentMethod": { "type": "string" },
+        "status": { "type": "string" },
+        "transactionRef": { "type": "string" },
+        "createdAt": { "type": "timestamp" }
+      }
+    },
+    "AppNotification": {
+      "collection": "notifications",
+      "fields": {
+        "patientId": { "type": "string" },
+        "title": { "type": "string" },
+        "message": { "type": "string" },
+        "category": { "type": "string" },
+        "isRead": { "type": "boolean" },
+        "createdAt": { "type": "timestamp" }
+      }
+    },
+    "Review": {
+      "collection": "reviews",
+      "fields": {
+        "patientId": { "type": "string" },
+        "patientName": { "type": "string" },
+        "targetId": { "type": "string" },
+        "targetName": { "type": "string" },
+        "targetType": { "type": "string" },
+        "rating": { "type": "number" },
+        "comment": { "type": "string" },
+        "createdAt": { "type": "timestamp" }
+      }
+    },
+    "SupportTicket": {
+      "collection": "support_tickets",
+      "fields": {
+        "patientId": { "type": "string" },
+        "category": { "type": "string" },
+        "subject": { "type": "string" },
+        "description": { "type": "string" },
+        "status": { "type": "string" },
+        "createdAt": { "type": "timestamp" }
       }
     },
     "InsuranceClaim": {
@@ -89,6 +192,7 @@
       "collection": "medical_records",
       "fields": {
         "patientId": { "type": "string" },
+        "memberName": { "type": "string" },
         "title": { "type": "string" },
         "category": { "type": "string" },
         "doctorOrFacility": { "type": "string" },

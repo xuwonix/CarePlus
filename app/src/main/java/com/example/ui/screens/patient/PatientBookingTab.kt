@@ -1,6 +1,7 @@
 package com.example.ui.screens.patient
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,13 +20,13 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Biotech
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Chat
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.MedicalServices
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -55,6 +56,8 @@ import com.example.data.model.Appointment
 import com.example.data.model.DiagnosticBooking
 import com.example.data.model.DiagnosticCenter
 import com.example.data.model.DiagnosticTest
+import com.example.data.model.HomeCareBooking
+import com.example.data.model.HomeCareService
 import com.example.data.model.Specialist
 import com.example.ui.viewmodel.HealthcareUiState
 
@@ -64,12 +67,19 @@ fun PatientBookingTab(
     state: HealthcareUiState,
     onSelectSubTab: (Int) -> Unit,
     onSelectSpecialty: (String) -> Unit,
+    onOpenDoctorProfile: (Specialist) -> Unit,
     onBookDoctor: (Specialist) -> Unit,
     onBookTest: (DiagnosticCenter, DiagnosticTest) -> Unit,
+    onBookHomeCare: (HomeCareService) -> Unit,
+    onRescheduleAppointment: (Appointment) -> Unit,
     onCancelAppointment: (String) -> Unit,
+    onRescheduleDiagnostic: (DiagnosticBooking) -> Unit,
+    onCancelDiagnostic: (String) -> Unit,
+    onRescheduleHomeCare: (HomeCareBooking) -> Unit,
+    onCancelHomeCare: (String) -> Unit,
     onOpenChatWithDoctor: (doctorName: String, doctorId: String) -> Unit
 ) {
-    val subTabs = listOf("Doctors", "Lab Tests", "My Bookings")
+    val subTabs = listOf("Doctors", "Lab Tests", "Home Care", "My Bookings")
     var localSearch by remember { mutableStateOf("") }
 
     Column(
@@ -78,7 +88,7 @@ fun PatientBookingTab(
             .testTag("patient_booking_tab")
     ) {
         SecondaryTabRow(
-            selectedTabIndex = state.bookingSubTab,
+            selectedTabIndex = state.bookingSubTab.coerceIn(0, subTabs.lastIndex),
             modifier = Modifier.fillMaxWidth()
         ) {
             subTabs.forEachIndexed { index, title ->
@@ -88,6 +98,7 @@ fun PatientBookingTab(
                     text = {
                         Text(
                             text = title,
+                            maxLines = 1,
                             fontWeight = if (state.bookingSubTab == index) FontWeight.Bold else FontWeight.Normal
                         )
                     },
@@ -103,6 +114,7 @@ fun PatientBookingTab(
                 searchQuery = localSearch,
                 onSearchChange = { localSearch = it },
                 onSelectSpecialty = onSelectSpecialty,
+                onOpenProfile = onOpenDoctorProfile,
                 onBook = onBookDoctor,
                 onChat = { onOpenChatWithDoctor(it.name, it.id) }
             )
@@ -112,10 +124,20 @@ fun PatientBookingTab(
                 onSearchChange = { localSearch = it },
                 onBookTest = onBookTest
             )
-            2 -> MyBookingsSection(
+            2 -> HomeCareBookingSection(
+                services = state.homeCareServices,
+                onBookHomeCare = onBookHomeCare
+            )
+            else -> MyBookingsSection(
                 appointments = state.patientAppointments,
                 diagnosticBookings = state.patientDiagnosticBookings,
+                homeCareBookings = state.homeCareBookings,
+                onRescheduleAppointment = onRescheduleAppointment,
                 onCancelAppointment = onCancelAppointment,
+                onRescheduleDiagnostic = onRescheduleDiagnostic,
+                onCancelDiagnostic = onCancelDiagnostic,
+                onRescheduleHomeCare = onRescheduleHomeCare,
+                onCancelHomeCare = onCancelHomeCare,
                 onOpenChatWithDoctor = onOpenChatWithDoctor,
                 onGoToDoctors = { onSelectSubTab(0) }
             )
@@ -130,20 +152,25 @@ private fun DoctorsBookingSection(
     searchQuery: String,
     onSearchChange: (String) -> Unit,
     onSelectSpecialty: (String) -> Unit,
+    onOpenProfile: (Specialist) -> Unit,
     onBook: (Specialist) -> Unit,
     onChat: (Specialist) -> Unit
 ) {
     val specialties = listOf("All", "Cardiology", "Neurology", "Orthopedics", "Pediatrics", "Dermatology", "General Medicine")
+    var videoOnly by remember { mutableStateOf(false) }
+    var sortByFee by remember { mutableStateOf(false) }
 
-    val filtered = remember(specialists, selectedSpecialty, searchQuery) {
-        specialists.filter { doc ->
+    val filtered = remember(specialists, selectedSpecialty, searchQuery, videoOnly, sortByFee) {
+        val list = specialists.filter { doc ->
             val matchesSpec = selectedSpecialty == "All" || doc.specialty.equals(selectedSpecialty, ignoreCase = true)
             val matchesQuery = searchQuery.isBlank() ||
                 doc.name.contains(searchQuery, ignoreCase = true) ||
                 doc.specialty.contains(searchQuery, ignoreCase = true) ||
                 doc.clinicHospital.contains(searchQuery, ignoreCase = true)
-            matchesSpec && matchesQuery
+            val matchesVideo = !videoOnly || doc.offersVideoConsult
+            matchesSpec && matchesQuery && matchesVideo
         }
+        if (sortByFee) list.sortedBy { it.fee } else list
     }
 
     LazyColumn(
@@ -155,7 +182,7 @@ private fun DoctorsBookingSection(
             OutlinedTextField(
                 value = searchQuery,
                 onValueChange = onSearchChange,
-                placeholder = { Text("Filter doctors or hospitals...") },
+                placeholder = { Text("Filter doctors, specialties, hospitals...") },
                 leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
                 trailingIcon = {
                     if (searchQuery.isNotEmpty()) {
@@ -183,9 +210,26 @@ private fun DoctorsBookingSection(
             }
         }
 
+        item {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilterChip(
+                    selected = videoOnly,
+                    onClick = { videoOnly = !videoOnly },
+                    label = { Text("Video Consult") },
+                    leadingIcon = { Icon(Icons.Default.Videocam, contentDescription = null, modifier = Modifier.size(16.dp)) }
+                )
+                FilterChip(
+                    selected = sortByFee,
+                    onClick = { sortByFee = !sortByFee },
+                    label = { Text("Fee: Low to High") }
+                )
+            }
+        }
+
         items(filtered) { specialist ->
             BookingSpecialistCard(
                 specialist = specialist,
+                onOpenProfile = { onOpenProfile(specialist) },
                 onBook = { onBook(specialist) },
                 onChat = { onChat(specialist) }
             )
@@ -196,6 +240,7 @@ private fun DoctorsBookingSection(
 @Composable
 private fun BookingSpecialistCard(
     specialist: Specialist,
+    onOpenProfile: () -> Unit,
     onBook: () -> Unit,
     onChat: () -> Unit
 ) {
@@ -205,6 +250,7 @@ private fun BookingSpecialistCard(
         border = CardDefaults.outlinedCardBorder(),
         modifier = Modifier
             .fillMaxWidth()
+            .clickable { onOpenProfile() }
             .testTag("specialist_card_${specialist.id}")
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
@@ -219,54 +265,24 @@ private fun BookingSpecialistCard(
                         .background(MaterialTheme.colorScheme.primaryContainer),
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.MedicalServices,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(24.dp)
-                    )
+                    Icon(Icons.Default.MedicalServices, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(24.dp))
                 }
                 Spacer(modifier = Modifier.width(12.dp))
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = specialist.name,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        text = "${specialist.specialty} • ${specialist.experienceYears}y exp",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    Text(specialist.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Text("${specialist.specialty} • ${specialist.experienceYears}y exp", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        imageVector = Icons.Default.Star,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.tertiary,
-                        modifier = Modifier.size(16.dp)
-                    )
+                    Icon(Icons.Default.Star, contentDescription = null, tint = MaterialTheme.colorScheme.tertiary, modifier = Modifier.size(16.dp))
                     Spacer(modifier = Modifier.width(2.dp))
-                    Text(
-                        text = "${specialist.rating}",
-                        style = MaterialTheme.typography.labelMedium,
-                        fontWeight = FontWeight.Bold
-                    )
+                    Text("${specialist.rating}", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
                 }
             }
 
             Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = specialist.bio,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            Text(specialist.bio, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(modifier = Modifier.height(6.dp))
-            Text(
-                text = "${specialist.clinicHospital} • ${specialist.address}",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.secondary
-            )
+            Text("${specialist.clinicHospital} • ${specialist.address}", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.secondary)
             Spacer(modifier = Modifier.height(8.dp))
 
             Row(
@@ -274,17 +290,8 @@ private fun BookingSpecialistCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = "Next: ${specialist.nextAvailableSlot}",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.primary,
-                    fontWeight = FontWeight.SemiBold
-                )
-                Text(
-                    text = "$${specialist.fee.toInt()} / visit",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
-                )
+                Text("Next: ${specialist.nextAvailableSlot}", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
+                Text("$${specialist.fee.toInt()} / visit", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             }
 
             Spacer(modifier = Modifier.height(12.dp))
@@ -299,7 +306,7 @@ private fun BookingSpecialistCard(
                         .weight(1f)
                         .testTag("message_doctor_button_${specialist.id}")
                 ) {
-                    Icon(imageVector = Icons.Default.Chat, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Icon(Icons.Default.Chat, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(modifier = Modifier.width(6.dp))
                     Text("Chat")
                 }
@@ -309,7 +316,7 @@ private fun BookingSpecialistCard(
                         .weight(1.5f)
                         .testTag("book_doctor_button_${specialist.id}")
                 ) {
-                    Icon(imageVector = Icons.Default.CalendarMonth, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Icon(Icons.Default.CalendarMonth, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(modifier = Modifier.width(6.dp))
                     Text("Book Slot")
                 }
@@ -367,16 +374,8 @@ private fun DiagnosticsBookingSection(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = center.name,
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.Bold
-                                )
-                                Text(
-                                    text = "${center.address} • ${center.distanceKm} km away",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
+                                Text(center.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                                Text("${center.address} • ${center.distanceKm} km • ${center.accreditation}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                             if (center.providesHomeCollection) {
                                 SuggestionChip(onClick = {}, label = { Text("Home Pickup") })
@@ -388,9 +387,7 @@ private fun DiagnosticsBookingSection(
                         matchingTests.forEach { test ->
                             Card(
                                 shape = RoundedCornerShape(10.dp),
-                                colors = CardDefaults.cardColors(
-                                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
-                                ),
+                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)),
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .padding(vertical = 4.dp)
@@ -403,29 +400,13 @@ private fun DiagnosticsBookingSection(
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Column(modifier = Modifier.weight(1f)) {
-                                        Text(
-                                            text = test.name,
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                        Text(
-                                            text = "${test.sampleType} • ${test.turnaroundTime}",
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                        Text(
-                                            text = "Prep: ${test.preparationSummary}",
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = MaterialTheme.colorScheme.secondary
-                                        )
+                                        Text(test.name, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                                        Text("${test.sampleType} • ${test.turnaroundTime}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        Text("Prep: ${test.preparationSummary}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.secondary)
                                     }
                                     Spacer(modifier = Modifier.width(8.dp))
                                     Column(horizontalAlignment = Alignment.End) {
-                                        Text(
-                                            text = "$${test.price.toInt()}",
-                                            style = MaterialTheme.typography.titleSmall,
-                                            fontWeight = FontWeight.Bold
-                                        )
+                                        Text("$${test.price.toInt()}", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
                                         Spacer(modifier = Modifier.height(4.dp))
                                         Button(
                                             onClick = { onBookTest(center, test) },
@@ -437,151 +418,6 @@ private fun DiagnosticsBookingSection(
                                     }
                                 }
                             }
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun MyBookingsSection(
-    appointments: List<Appointment>,
-    diagnosticBookings: List<DiagnosticBooking>,
-    onCancelAppointment: (String) -> Unit,
-    onOpenChatWithDoctor: (String, String) -> Unit,
-    onGoToDoctors: () -> Unit
-) {
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        item {
-            Text(
-                text = "Doctor Appointments (${appointments.size})",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold
-            )
-        }
-
-        if (appointments.isEmpty()) {
-            item {
-                Card(
-                    shape = RoundedCornerShape(14.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Column(
-                        modifier = Modifier.padding(20.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Text("No appointments booked yet", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-                        Spacer(modifier = Modifier.height(6.dp))
-                        Button(onClick = onGoToDoctors) {
-                            Text("Browse Specialists")
-                        }
-                    }
-                }
-            }
-        } else {
-            items(appointments) { appt ->
-                Card(
-                    shape = RoundedCornerShape(14.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                    border = CardDefaults.outlinedCardBorder(),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Column(modifier = Modifier.padding(14.dp)) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(appt.specialistName, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-                                Text("${appt.specialty} • ${appt.date} at ${appt.timeSlot}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                Text(appt.clinicHospital, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.secondary)
-                            }
-                            SuggestionChip(onClick = {}, label = { Text(appt.status) })
-                        }
-                        if (appt.notes.isNotBlank()) {
-                            Spacer(modifier = Modifier.height(6.dp))
-                            Text("Notes: ${appt.notes}", style = MaterialTheme.typography.bodySmall)
-                        }
-                        if (appt.prescription.isNotBlank()) {
-                            Spacer(modifier = Modifier.height(6.dp))
-                            Text("Rx: ${appt.prescription}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
-                        }
-                        if (appt.status == "SCHEDULED") {
-                            Spacer(modifier = Modifier.height(10.dp))
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                OutlinedButton(
-                                    onClick = { onOpenChatWithDoctor(appt.specialistName, appt.specialistId) },
-                                    modifier = Modifier.weight(1f)
-                                ) {
-                                    Icon(Icons.Default.Chat, contentDescription = null, modifier = Modifier.size(16.dp))
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Text("Chat")
-                                }
-                                OutlinedButton(
-                                    onClick = { onCancelAppointment(appt.id) },
-                                    modifier = Modifier.weight(1f)
-                                ) {
-                                    Text("Cancel")
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        item {
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = "Diagnostic Lab Bookings (${diagnosticBookings.size})",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold
-            )
-        }
-
-        if (diagnosticBookings.isEmpty()) {
-            item {
-                Text(
-                    text = "No diagnostic tests scheduled yet.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        } else {
-            items(diagnosticBookings) { booking ->
-                Card(
-                    shape = RoundedCornerShape(14.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                    border = CardDefaults.outlinedCardBorder(),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Column(modifier = Modifier.padding(14.dp)) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(booking.testName, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-                                Text("${booking.centerName} • ${booking.scheduledDate}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
-                            SuggestionChip(onClick = {}, label = { Text(booking.status.replace("_", " ")) })
-                        }
-                        if (booking.resultSummary.isNotBlank()) {
-                            Spacer(modifier = Modifier.height(6.dp))
-                            Text(
-                                text = booking.resultSummary,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = if (booking.abnormalFlag) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
-                            )
                         }
                     }
                 }

@@ -236,7 +236,7 @@ private fun HealthLockerSection(
                             SuggestionChip(onClick = {}, label = { Text(record.category.replace("_", " ")) })
                         }
                         Text(
-                            text = "${record.doctorOrFacility} • ${record.recordDate}",
+                            text = "${record.doctorOrFacility} • ${record.recordDate} • For: ${record.memberName}",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -291,7 +291,11 @@ private fun HealthLockerSection(
                                 Text(booking.testName, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
                                 SuggestionChip(onClick = {}, label = { Text(booking.status.replace("_", " ")) })
                             }
-                            Text("${booking.centerName} • ${booking.scheduledDate}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(
+                                text = "${booking.centerName} • ${booking.scheduledDate} • For: ${booking.familyMemberName}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                             if (booking.resultSummary.isNotBlank()) {
                                 Spacer(modifier = Modifier.height(4.dp))
                                 Text(

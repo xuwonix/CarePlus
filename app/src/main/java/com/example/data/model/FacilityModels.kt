@@ -12,7 +12,10 @@ data class NearbyFacility(
     val hasEmergencyUnit: Boolean,
     val providesHomeCollection: Boolean,
     val departments: List<String>,
-    val waitTimeMinutes: Int
+    val waitTimeMinutes: Int,
+    val phone: String = "+1 (555) 204-8800",
+    val accreditation: String = "JCI & NABH Accredited",
+    val acceptsCashlessInsurance: Boolean = true
 )
 
 data class MedicalSpecialtyItem(
@@ -28,8 +31,8 @@ enum class HealthServiceCategory(
 ) {
     SPECIALIST_CONSULT("Doctor Visit", "Book specialists"),
     LAB_DIAGNOSTICS("Lab & Scans", "Home collection"),
+    HOME_CARE("Home Care", "Nurse & physio"),
     EMERGENCY_EMS("Ambulance", "Rapid 24/7 SOS"),
     HEALTH_INSURANCE("Insurance", "Cashless claims"),
-    PROCEDURE_GUIDES("Procedures", "Prep & recovery"),
-    HEALTH_LOCKER("Health Vault", "Digital records")
+    PROCEDURE_GUIDES("Procedures", "Prep & recovery")
 }

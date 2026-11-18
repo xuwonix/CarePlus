@@ -6,25 +6,20 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Emergency
-import androidx.compose.material.icons.filled.MedicalServices
-import androidx.compose.material.icons.filled.Payments
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
@@ -41,15 +36,19 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.data.model.DiagnosticCenter
 import com.example.data.model.DiagnosticTest
+import com.example.data.model.FamilyMember
+import com.example.data.model.HomeCareService
 import com.example.data.model.Specialist
 
 @Composable
 fun AmbulanceDispatchModal(
+    defaultAddress: String = "420 Maple Avenue, Apt 3B",
+    defaultPhone: String = "+1 (555) 911-3829",
     onDismiss: () -> Unit,
     onConfirm: (pickup: String, emergencyType: String, ambulanceType: String, phone: String) -> Unit
 ) {
-    var pickupAddress by remember { mutableStateOf("420 Maple Avenue, Apt 3B") }
-    var patientPhone by remember { mutableStateOf("+1 (555) 911-3829") }
+    var pickupAddress by remember { mutableStateOf(defaultAddress.ifBlank { "420 Maple Avenue, Apt 3B" }) }
+    var patientPhone by remember { mutableStateOf(defaultPhone.ifBlank { "+1 (555) 911-3829" }) }
     var selectedEmergencyType by remember { mutableStateOf("CARDIAC_OR_RESPIRATORY") }
     var selectedVehicleType by remember { mutableStateOf("ADVANCED_CARDIAC") }
 
@@ -180,16 +179,29 @@ fun AmbulanceDispatchModal(
 @Composable
 fun BookSpecialistModal(
     specialist: Specialist,
+    familyMembers: List<FamilyMember>,
     onDismiss: () -> Unit,
-    onConfirm: (date: String, timeSlot: String, mode: String, notes: String) -> Unit
+    onConfirm: (
+        date: String,
+        timeSlot: String,
+        mode: String,
+        notes: String,
+        familyMemberName: String,
+        paymentMethod: String
+    ) -> Unit
 ) {
-    var selectedDate by remember { mutableStateOf("Tomorrow (10:30 AM)") }
-    var selectedSlot by remember { mutableStateOf("10:30 AM") }
+    val memberOptions = remember(familyMembers) {
+        listOf("Self") + familyMembers.map { "${it.name} (${it.relationship})" }
+    }
+    var selectedMember by remember { mutableStateOf("Self") }
+    var selectedDay by remember { mutableStateOf(specialist.availableDays.firstOrNull() ?: "Tomorrow") }
+    var selectedSlot by remember { mutableStateOf(specialist.timeSlots.firstOrNull() ?: "10:30 AM") }
     var selectedMode by remember { mutableStateOf("IN_CLINIC") }
     var notesText by remember { mutableStateOf("") }
+    var selectedPayment by remember { mutableStateOf("Card •••• 4242") }
 
-    val slots = specialist.timeSlots
-    val modes = listOf("IN_CLINIC" to "In-Clinic Visit", "VIDEO_CALL" to "Video Consultation", "CHAT" to "Clinical Chat")
+    val modes = listOf("IN_CLINIC" to "In-Clinic", "VIDEO_CALL" to "Video Call", "CHAT" to "Chat")
+    val paymentMethods = listOf("Card •••• 4242", "UPI / Instant Pay", "Insurance Cashless", "Pay at Clinic")
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -201,7 +213,7 @@ fun BookSpecialistModal(
                     fontWeight = FontWeight.Bold
                 )
                 Text(
-                    text = "${specialist.name} • ${specialist.specialty}",
+                    text = "${specialist.name} • $${specialist.fee.toInt()}",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.primary
                 )
@@ -214,18 +226,18 @@ fun BookSpecialistModal(
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                Text(
-                    text = "Clinic: ${specialist.clinicHospital} ($${specialist.fee.toInt()} fee)",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                Text("Booking For:", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    items(memberOptions) { member ->
+                        FilterChip(
+                            selected = selectedMember == member,
+                            onClick = { selectedMember = member },
+                            label = { Text(member, style = MaterialTheme.typography.labelSmall) }
+                        )
+                    }
+                }
 
-                Text(
-                    text = "Select Consultation Mode:",
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.Bold
-                )
-
+                Text("Consultation Mode:", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -240,21 +252,24 @@ fun BookSpecialistModal(
                     }
                 }
 
-                Text(
-                    text = "Select Available Time Slot:",
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.Bold
-                )
+                Text("Select Date:", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    items(specialist.availableDays) { day ->
+                        FilterChip(
+                            selected = selectedDay == day,
+                            onClick = { selectedDay = day },
+                            label = { Text(day, style = MaterialTheme.typography.labelSmall) }
+                        )
+                    }
+                }
 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    slots.take(3).forEach { slot ->
+                Text("Select Time Slot:", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    items(specialist.timeSlots) { slot ->
                         FilterChip(
                             selected = selectedSlot == slot,
                             onClick = { selectedSlot = slot },
-                            label = { Text(slot) }
+                            label = { Text(slot, style = MaterialTheme.typography.labelSmall) }
                         )
                     }
                 }
@@ -263,165 +278,34 @@ fun BookSpecialistModal(
                     value = notesText,
                     onValueChange = { notesText = it },
                     label = { Text("Symptoms / Reason for Visit") },
-                    placeholder = { Text("e.g. Experiencing persistent palpitations after workouts.") },
+                    placeholder = { Text("e.g. Palpitations or follow-up checkup") },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(90.dp)
+                        .height(84.dp)
                         .testTag("appointment_notes_input"),
                     shape = RoundedCornerShape(12.dp)
                 )
+
+                Text("Payment Checkout ($${specialist.fee.toInt()}):", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                paymentMethods.forEach { method ->
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        RadioButton(
+                            selected = selectedPayment == method,
+                            onClick = { selectedPayment = method }
+                        )
+                        Text(method, style = MaterialTheme.typography.bodySmall)
+                    }
+                }
             }
         },
         confirmButton = {
             Button(
                 onClick = {
-                    onConfirm("Tomorrow", selectedSlot, selectedMode, notesText)
+                    onConfirm(selectedDay, selectedSlot, selectedMode, notesText, selectedMember, selectedPayment)
                 },
                 modifier = Modifier.testTag("confirm_booking_button")
             ) {
-                Text("Confirm Appointment")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Cancel")
-            }
-        }
-    )
-}
-
-@Composable
-fun BookDiagnosticModal(
-    center: DiagnosticCenter,
-    test: DiagnosticTest,
-    onDismiss: () -> Unit,
-    onConfirm: (date: String, collectionType: String) -> Unit
-) {
-    var collectionType by remember { mutableStateOf(if (center.providesHomeCollection) "HOME_COLLECTION" else "LAB_VISIT") }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = {
-            Column {
-                Text(text = "Book Diagnostic Test", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                Text(text = test.name, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
-            }
-        },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text(
-                    text = "Facility: ${center.name} • Price: $${test.price.toInt()}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Text(
-                    text = "Preparation: ${test.preparationSummary}",
-                    style = MaterialTheme.typography.bodySmall,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.secondary
-                )
-
-                Text(
-                    text = "Sample Collection Method:",
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.Bold
-                )
-
-                if (center.providesHomeCollection) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        RadioButton(
-                            selected = collectionType == "HOME_COLLECTION",
-                            onClick = { collectionType = "HOME_COLLECTION" }
-                        )
-                        Text("Phlebotomist Home Sample Collection")
-                    }
-                }
-
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    RadioButton(
-                        selected = collectionType == "LAB_VISIT",
-                        onClick = { collectionType = "LAB_VISIT" }
-                    )
-                    Text("Visit Diagnostic Lab Center")
-                }
-            }
-        },
-        confirmButton = {
-            Button(
-                onClick = { onConfirm("Tomorrow at 08:30 AM", collectionType) },
-                modifier = Modifier.testTag("confirm_diagnostic_button")
-            ) {
-                Text("Confirm Test Slot")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Cancel")
-            }
-        }
-    )
-}
-
-@Composable
-fun SubmitInsuranceClaimModal(
-    onDismiss: () -> Unit,
-    onConfirm: (policy: String, provider: String, hospital: String, procedure: String, amount: Double, claimType: String, docRef: String) -> Unit
-) {
-    var policyNumber by remember { mutableStateOf("BCS-9923842") }
-    var hospitalName by remember { mutableStateOf("Metro General Hospital") }
-    var procedureName by remember { mutableStateOf("Upper GI Endoscopy & Biopsy") }
-    var amountText by remember { mutableStateOf("1250.0") }
-    var claimType by remember { mutableStateOf("CASHLESS") }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Submit Cashless Claim / Pre-Auth") },
-        text = {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                OutlinedTextField(
-                    value = policyNumber,
-                    onValueChange = { policyNumber = it },
-                    label = { Text("Policy ID") },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp)
-                )
-                OutlinedTextField(
-                    value = hospitalName,
-                    onValueChange = { hospitalName = it },
-                    label = { Text("Hospital / Center Name") },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp)
-                )
-                OutlinedTextField(
-                    value = procedureName,
-                    onValueChange = { procedureName = it },
-                    label = { Text("Medical Procedure") },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp)
-                )
-                OutlinedTextField(
-                    value = amountText,
-                    onValueChange = { amountText = it },
-                    label = { Text("Estimated / Billed Amount ($)") },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp)
-                )
-            }
-        },
-        confirmButton = {
-            Button(
-                onClick = {
-                    val amount = amountText.toDoubleOrNull() ?: 1000.0
-                    onConfirm(policyNumber, "BlueCross Shield", hospitalName, procedureName, amount, claimType, "DOC-REF-${(100..999).random()}")
-                },
-                modifier = Modifier.testTag("submit_claim_confirm_button")
-            ) {
-                Text("Submit for Pre-Auth")
+                Text("Pay & Confirm")
             }
         },
         dismissButton = {
@@ -431,86 +315,288 @@ fun SubmitInsuranceClaimModal(
 }
 
 @Composable
-fun AddMedicalRecordModal(
+fun BookDiagnosticModal(
+    center: DiagnosticCenter,
+    test: DiagnosticTest,
+    familyMembers: List<FamilyMember>,
+    defaultAddress: String,
     onDismiss: () -> Unit,
-    onConfirm: (title: String, category: String, doctor: String, date: String, summary: String, metrics: String) -> Unit
+    onConfirm: (
+        date: String,
+        timeWindow: String,
+        collectionType: String,
+        address: String,
+        familyMemberName: String,
+        paymentMethod: String
+    ) -> Unit
 ) {
-    var title by remember { mutableStateOf("") }
-    var category by remember { mutableStateOf("PRESCRIPTION") }
-    var doctor by remember { mutableStateOf("Dr. Elena Rostova") }
-    var date by remember { mutableStateOf("Nov 12, 2026") }
-    var summary by remember { mutableStateOf("") }
-    var metrics by remember { mutableStateOf("BP: 120/80 mmHg | Heart Rate: 72 bpm | Glucose: 95 mg/dL") }
+    val memberOptions = remember(familyMembers) {
+        listOf("Self") + familyMembers.map { "${it.name} (${it.relationship})" }
+    }
+    val dateOptions = listOf("Tomorrow", "Fri Nov 20", "Sat Nov 21")
+    val timeWindows = listOf("07:00 AM - 08:30 AM", "09:00 AM - 10:30 AM", "04:00 PM - 05:30 PM")
+    val paymentMethods = listOf("Card •••• 4242", "UPI / Instant Pay", "Pay on Doorstep / Lab")
 
-    val categories = listOf("PRESCRIPTION", "LAB_REPORT", "RADIOLOGY", "DISCHARGE_SUMMARY", "VITALS")
+    var selectedMember by remember { mutableStateOf("Self") }
+    var selectedDate by remember { mutableStateOf(dateOptions.first()) }
+    var selectedTime by remember { mutableStateOf(timeWindows.first()) }
+    var collectionType by remember { mutableStateOf(if (center.providesHomeCollection) "HOME_COLLECTION" else "LAB_VISIT") }
+    var address by remember { mutableStateOf(defaultAddress.ifBlank { "420 Maple Avenue, Apt 3B" }) }
+    var selectedPayment by remember { mutableStateOf(paymentMethods.first()) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Add Medical Record to Locker") },
+        title = {
+            Column {
+                Text(text = "Book Diagnostic Test", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                Text(text = "${test.name} • $${test.price.toInt()}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+            }
+        },
         text = {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                OutlinedTextField(
-                    value = title,
-                    onValueChange = { title = it },
-                    label = { Text("Document Title (e.g. Cardiology Rx, Lipid Panel)") },
-                    modifier = Modifier.fillMaxWidth().testTag("record_title_input"),
-                    shape = RoundedCornerShape(12.dp)
+                Text(
+                    text = "Prep: ${test.preparationSummary}",
+                    style = MaterialTheme.typography.bodySmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.secondary
                 )
 
-                Text("Category:", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    categories.take(3).forEach { cat ->
+                Text("Patient:", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    items(memberOptions) { member ->
                         FilterChip(
-                            selected = category == cat,
-                            onClick = { category = cat },
-                            label = { Text(cat.replace("_", " "), style = MaterialTheme.typography.labelSmall) }
+                            selected = selectedMember == member,
+                            onClick = { selectedMember = member },
+                            label = { Text(member, style = MaterialTheme.typography.labelSmall) }
                         )
                     }
                 }
 
-                OutlinedTextField(
-                    value = doctor,
-                    onValueChange = { doctor = it },
-                    label = { Text("Doctor or Facility Name") },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp)
-                )
+                Text("Collection Method:", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                if (center.providesHomeCollection) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        RadioButton(
+                            selected = collectionType == "HOME_COLLECTION",
+                            onClick = { collectionType = "HOME_COLLECTION" }
+                        )
+                        Text("Home Sample Collection (Free Phlebotomist)", style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    RadioButton(
+                        selected = collectionType == "LAB_VISIT",
+                        onClick = { collectionType = "LAB_VISIT" }
+                    )
+                    Text("Visit ${center.name}", style = MaterialTheme.typography.bodySmall)
+                }
 
-                OutlinedTextField(
-                    value = summary,
-                    onValueChange = { summary = it },
-                    label = { Text("Clinical Notes / Instructions") },
-                    modifier = Modifier.fillMaxWidth().height(80.dp),
-                    shape = RoundedCornerShape(12.dp)
-                )
+                if (collectionType == "HOME_COLLECTION") {
+                    OutlinedTextField(
+                        value = address,
+                        onValueChange = { address = it },
+                        label = { Text("Home Collection Address") },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp)
+                    )
+                }
 
-                OutlinedTextField(
-                    value = metrics,
-                    onValueChange = { metrics = it },
-                    label = { Text("Vital Signs & Key Values") },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp)
-                )
+                Text("Preferred Date:", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    items(dateOptions) { d ->
+                        FilterChip(selected = selectedDate == d, onClick = { selectedDate = d }, label = { Text(d) })
+                    }
+                }
+
+                Text("Arrival / Lab Window:", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    items(timeWindows) { w ->
+                        FilterChip(selected = selectedTime == w, onClick = { selectedTime = w }, label = { Text(w) })
+                    }
+                }
+
+                Text("Payment Method:", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                paymentMethods.forEach { method ->
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        RadioButton(selected = selectedPayment == method, onClick = { selectedPayment = method })
+                        Text(method, style = MaterialTheme.typography.bodySmall)
+                    }
+                }
             }
         },
         confirmButton = {
             Button(
                 onClick = {
-                    if (title.isNotBlank()) {
-                        onConfirm(title, category, doctor, date, summary, metrics)
-                    }
+                    val finalAddress = if (collectionType == "HOME_COLLECTION") address else center.address
+                    onConfirm(selectedDate, selectedTime, collectionType, finalAddress, selectedMember, selectedPayment)
                 },
-                modifier = Modifier.testTag("save_record_button")
+                modifier = Modifier.testTag("confirm_diagnostic_button")
             ) {
-                Text("Save to Locker")
+                Text("Confirm ($${test.price.toInt()})")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        }
+    )
+}
+
+@Composable
+fun BookHomeCareModal(
+    service: HomeCareService,
+    familyMembers: List<FamilyMember>,
+    defaultAddress: String,
+    onDismiss: () -> Unit,
+    onConfirm: (
+        memberName: String,
+        visitAddress: String,
+        scheduledDate: String,
+        timeWindow: String,
+        notes: String,
+        paymentMethod: String
+    ) -> Unit
+) {
+    val memberOptions = remember(familyMembers) {
+        listOf("Self") + familyMembers.map { "${it.name} (${it.relationship})" }
+    }
+    val dateOptions = listOf("Today", "Tomorrow", "Fri Nov 20", "Sat Nov 21")
+    val windows = listOf("09:00 AM - 11:00 AM", "12:00 PM - 02:00 PM", "04:00 PM - 06:00 PM")
+    val paymentMethods = listOf("Card •••• 4242", "UPI / Instant Pay", "Pay at Doorstep")
+
+    var selectedMember by remember { mutableStateOf("Self") }
+    var visitAddress by remember { mutableStateOf(defaultAddress.ifBlank { "420 Maple Avenue, Apt 3B" }) }
+    var selectedDate by remember { mutableStateOf(dateOptions[1]) }
+    var selectedWindow by remember { mutableStateOf(windows[0]) }
+    var notes by remember { mutableStateOf("") }
+    var selectedPayment by remember { mutableStateOf(paymentMethods.first()) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Column {
+                Text("Book Home Healthcare", fontWeight = FontWeight.Bold)
+                Text("${service.title} • $${service.price.toInt()}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+            }
+        },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Text("${service.providerTeam} • ${service.duration}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary)
+
+                Text("Care For:", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    items(memberOptions) { m ->
+                        FilterChip(selected = selectedMember == m, onClick = { selectedMember = m }, label = { Text(m) })
+                    }
+                }
+
+                OutlinedTextField(
+                    value = visitAddress,
+                    onValueChange = { visitAddress = it },
+                    label = { Text("Home Visit Address") },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp)
+                )
+
+                Text("Visit Date:", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    items(dateOptions) { d ->
+                        FilterChip(selected = selectedDate == d, onClick = { selectedDate = d }, label = { Text(d) })
+                    }
+                }
+
+                Text("Arrival Window:", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    items(windows) { w ->
+                        FilterChip(selected = selectedWindow == w, onClick = { selectedWindow = w }, label = { Text(w) })
+                    }
+                }
+
+                OutlinedTextField(
+                    value = notes,
+                    onValueChange = { notes = it },
+                    label = { Text("Care Instructions / Mobility Notes") },
+                    modifier = Modifier.fillMaxWidth().height(80.dp),
+                    shape = RoundedCornerShape(12.dp)
+                )
+
+                Text("Payment Method:", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                paymentMethods.forEach { method ->
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        RadioButton(selected = selectedPayment == method, onClick = { selectedPayment = method })
+                        Text(method, style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    onConfirm(selectedMember, visitAddress, selectedDate, selectedWindow, notes, selectedPayment)
+                },
+                modifier = Modifier.testTag("confirm_home_care_button")
+            ) {
+                Text("Confirm Visit ($${service.price.toInt()})")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        }
+    )
+}
+
+@Composable
+fun RescheduleBookingModal(
+    title: String,
+    currentSchedule: String,
+    onDismiss: () -> Unit,
+    onConfirm: (newDate: String, newSlot: String) -> Unit
+) {
+    val dates = listOf("Tomorrow", "Fri Nov 20", "Sat Nov 21", "Mon Nov 23")
+    val slots = listOf("09:00 AM", "10:30 AM", "02:00 PM", "04:30 PM", "06:00 PM")
+
+    var selectedDate by remember { mutableStateOf(dates.first()) }
+    var selectedSlot by remember { mutableStateOf(slots[1]) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Column {
+                Text("Reschedule Booking", fontWeight = FontWeight.Bold)
+                Text(title, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+            }
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("Current: $currentSchedule", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("New Date:", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    items(dates) { d ->
+                        FilterChip(selected = selectedDate == d, onClick = { selectedDate = d }, label = { Text(d) })
+                    }
+                }
+                Text("New Time Slot:", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    items(slots) { s ->
+                        FilterChip(selected = selectedSlot == s, onClick = { selectedSlot = s }, label = { Text(s) })
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = { onConfirm(selectedDate, selectedSlot) },
+                modifier = Modifier.testTag("confirm_reschedule_button")
+            ) {
+                Text("Save New Slot")
             }
         },
         dismissButton = {

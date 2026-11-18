@@ -4,18 +4,20 @@ import android.content.Context
 import android.util.Log
 import com.example.R
 import com.example.data.model.AmbulanceRequest
+import com.example.data.model.AppNotification
 import com.example.data.model.Appointment
 import com.example.data.model.ChatMessage
 import com.example.data.model.DiagnosticBooking
 import com.example.data.model.DiagnosticCenter
 import com.example.data.model.DiagnosticTest
+import com.example.data.model.FamilyMember
+import com.example.data.model.HomeCareBooking
+import com.example.data.model.HomeCareService
 import com.example.data.model.InsuranceClaim
 import com.example.data.model.MedicalRecord
-import com.example.data.model.MedicalSpecialtyItem
-import com.example.data.model.NearbyFacility
-import com.example.data.model.ProcedureChecklistStep
-import com.example.data.model.ProcedureGuide
-import com.example.data.model.Specialist
+import com.example.data.model.PaymentRecord
+import com.example.data.model.Review
+import com.example.data.model.SupportTicket
 import com.example.data.model.UserProfile
 import com.example.data.model.UserRole
 import com.google.firebase.Firebase
@@ -49,7 +51,7 @@ class HealthcareRepository(private val db: FirebaseFirestore) {
     fun getCurrentUser() = auth.currentUser
 
     // -------------------------------------------------------------
-    // PATIENT PROFILE
+    // PATIENT PROFILE & LOCATION
     // -------------------------------------------------------------
     suspend fun getOrCreateUserProfile(): UserProfile {
         val uid = requireUserId()
@@ -77,8 +79,15 @@ class HealthcareRepository(private val db: FirebaseFirestore) {
                     "displayName" to profile.displayName,
                     "role" to UserRole.PATIENT.name,
                     "phone" to profile.phone,
-                    "organization" to "",
-                    "licenseNumber" to "",
+                    "age" to profile.age,
+                    "gender" to profile.gender,
+                    "bloodGroup" to profile.bloodGroup,
+                    "allergies" to profile.allergies,
+                    "chronicConditions" to profile.chronicConditions,
+                    "emergencyContactName" to profile.emergencyContactName,
+                    "emergencyContactPhone" to profile.emergencyContactPhone,
+                    "locationArea" to profile.locationArea,
+                    "savedAddress" to profile.savedAddress,
                     "createdAt" to FieldValue.serverTimestamp(),
                     "updatedAt" to FieldValue.serverTimestamp()
                 )
@@ -99,8 +108,79 @@ class HealthcareRepository(private val db: FirebaseFirestore) {
             .collect { emit(it) }
     }
 
+    suspend fun updateUserProfile(profile: UserProfile) {
+        val uid = requireUserId()
+        db.collection("users").document(uid).update(
+            mapOf(
+                "displayName" to profile.displayName,
+                "phone" to profile.phone,
+                "age" to profile.age,
+                "gender" to profile.gender,
+                "bloodGroup" to profile.bloodGroup,
+                "allergies" to profile.allergies,
+                "chronicConditions" to profile.chronicConditions,
+                "emergencyContactName" to profile.emergencyContactName,
+                "emergencyContactPhone" to profile.emergencyContactPhone,
+                "savedAddress" to profile.savedAddress,
+                "locationArea" to profile.locationArea,
+                "updatedAt" to FieldValue.serverTimestamp()
+            )
+        ).await()
+    }
+
+    suspend fun updateLocation(area: String, address: String) {
+        val uid = requireUserId()
+        db.collection("users").document(uid).update(
+            mapOf(
+                "locationArea" to area,
+                "savedAddress" to address,
+                "updatedAt" to FieldValue.serverTimestamp()
+            )
+        ).await()
+    }
+
     // -------------------------------------------------------------
-    // APPOINTMENTS
+    // FAMILY PROFILES
+    // -------------------------------------------------------------
+    fun observeFamilyMembers(): Flow<List<FamilyMember>> = flow {
+        val uid = requireUserId()
+        db.collection("family_profiles")
+            .whereEqualTo("patientId", uid)
+            .snapshots()
+            .map { it.toObjects(FamilyMember::class.java) }
+            .catch { error ->
+                if (error is CancellationException) throw error
+                Log.w("HealthcareRepo", "Error observing family members: ${error.message}")
+                emit(emptyList())
+            }
+            .collect { emit(it) }
+    }
+
+    suspend fun addFamilyMember(member: FamilyMember) {
+        val uid = requireUserId()
+        val docRef = db.collection("family_profiles").document()
+        docRef.set(
+            mapOf(
+                "patientId" to uid,
+                "name" to member.name,
+                "relationship" to member.relationship,
+                "age" to member.age,
+                "gender" to member.gender,
+                "bloodGroup" to member.bloodGroup,
+                "allergies" to member.allergies,
+                "phone" to member.phone,
+                "createdAt" to FieldValue.serverTimestamp(),
+                "updatedAt" to FieldValue.serverTimestamp()
+            )
+        ).await()
+    }
+
+    suspend fun deleteFamilyMember(memberId: String) {
+        db.collection("family_profiles").document(memberId).delete().await()
+    }
+
+    // -------------------------------------------------------------
+    // APPOINTMENTS & PAYMENTS
     // -------------------------------------------------------------
     fun observePatientAppointments(): Flow<List<Appointment>> = flow {
         val uid = requireUserId()
@@ -110,7 +190,7 @@ class HealthcareRepository(private val db: FirebaseFirestore) {
             .map { it.toObjects(Appointment::class.java) }
             .catch { error ->
                 if (error is CancellationException) throw error
-                Log.w("HealthcareRepo", "Error observing patient appointments: ${error.message}")
+                Log.w("HealthcareRepo", "Error observing appointments: ${error.message}")
                 emit(emptyList())
             }
             .collect { emit(it) }
@@ -119,28 +199,272 @@ class HealthcareRepository(private val db: FirebaseFirestore) {
     suspend fun scheduleAppointment(appointment: Appointment) {
         val uid = requireUserId()
         val docRef = db.collection("appointments").document()
-        val payload = mapOf(
-            "patientId" to uid,
-            "patientName" to appointment.patientName.ifBlank { auth.currentUser?.displayName ?: "Patient" },
-            "specialistId" to appointment.specialistId,
-            "specialistName" to appointment.specialistName,
-            "specialty" to appointment.specialty,
-            "clinicHospital" to appointment.clinicHospital,
-            "date" to appointment.date,
-            "timeSlot" to appointment.timeSlot,
-            "mode" to appointment.mode,
-            "status" to "SCHEDULED",
-            "notes" to appointment.notes,
-            "prescription" to "",
-            "consultationFee" to appointment.consultationFee,
-            "createdAt" to FieldValue.serverTimestamp(),
-            "updatedAt" to FieldValue.serverTimestamp()
+        val paymentStatus = if (appointment.paymentMethod.contains("Clinic", ignoreCase = true)) "PAY_AT_COUNTER" else "PAID"
+        docRef.set(
+            mapOf(
+                "patientId" to uid,
+                "patientName" to appointment.patientName.ifBlank { auth.currentUser?.displayName ?: "Patient" },
+                "familyMemberName" to appointment.familyMemberName,
+                "specialistId" to appointment.specialistId,
+                "specialistName" to appointment.specialistName,
+                "specialty" to appointment.specialty,
+                "clinicHospital" to appointment.clinicHospital,
+                "date" to appointment.date,
+                "timeSlot" to appointment.timeSlot,
+                "mode" to appointment.mode,
+                "status" to "SCHEDULED",
+                "notes" to appointment.notes,
+                "prescription" to "",
+                "consultationFee" to appointment.consultationFee,
+                "paymentStatus" to paymentStatus,
+                "paymentMethod" to appointment.paymentMethod,
+                "createdAt" to FieldValue.serverTimestamp(),
+                "updatedAt" to FieldValue.serverTimestamp()
+            )
+        ).await()
+
+        recordPaymentInternal(
+            title = "Consultation: ${appointment.specialistName}",
+            providerName = appointment.clinicHospital,
+            category = "APPOINTMENT",
+            billingForName = appointment.familyMemberName,
+            amount = appointment.consultationFee,
+            paymentMethod = appointment.paymentMethod,
+            status = paymentStatus
         )
-        docRef.set(payload).await()
+
+        createNotification(
+            title = "Appointment Confirmed",
+            message = "${appointment.specialistName} (${appointment.specialty}) booked for ${appointment.familyMemberName} on ${appointment.date} at ${appointment.timeSlot}.",
+            category = "BOOKING"
+        )
+    }
+
+    suspend fun rescheduleAppointment(appointmentId: String, newDate: String, newSlot: String) {
+        db.collection("appointments").document(appointmentId).update(
+            mapOf(
+                "date" to newDate,
+                "timeSlot" to newSlot,
+                "status" to "SCHEDULED",
+                "updatedAt" to FieldValue.serverTimestamp()
+            )
+        ).await()
+        createNotification(
+            title = "Appointment Rescheduled",
+            message = "Your appointment was rescheduled to $newDate at $newSlot.",
+            category = "BOOKING"
+        )
     }
 
     suspend fun cancelAppointment(appointmentId: String) {
         db.collection("appointments").document(appointmentId).update(
+            mapOf(
+                "status" to "CANCELLED",
+                "updatedAt" to FieldValue.serverTimestamp()
+            )
+        ).await()
+        createNotification(
+            title = "Appointment Cancelled",
+            message = "Your consultation has been cancelled. Any online payment will be refunded in 3–5 business days.",
+            category = "BOOKING"
+        )
+    }
+
+    // -------------------------------------------------------------
+    // DIAGNOSTIC LABS & HOME COLLECTION
+    // -------------------------------------------------------------
+    fun observePatientDiagnosticBookings(): Flow<List<DiagnosticBooking>> = flow {
+        val uid = requireUserId()
+        db.collection("diagnostic_bookings")
+            .whereEqualTo("patientId", uid)
+            .snapshots()
+            .map { it.toObjects(DiagnosticBooking::class.java) }
+            .catch { error ->
+                if (error is CancellationException) throw error
+                Log.w("HealthcareRepo", "Error observing diagnostic bookings: ${error.message}")
+                emit(emptyList())
+            }
+            .collect { emit(it) }
+    }
+
+    suspend fun bookDiagnosticTest(
+        center: DiagnosticCenter,
+        test: DiagnosticTest,
+        scheduledDate: String,
+        scheduledTime: String,
+        collectionType: String,
+        collectionAddress: String,
+        familyMemberName: String,
+        paymentMethod: String
+    ) {
+        val uid = requireUserId()
+        val docRef = db.collection("diagnostic_bookings").document()
+        val paymentStatus = if (paymentMethod.contains("Doorstep", ignoreCase = true) || paymentMethod.contains("Clinic", ignoreCase = true)) {
+            "PAY_AT_COUNTER"
+        } else {
+            "PAID"
+        }
+        docRef.set(
+            mapOf(
+                "patientId" to uid,
+                "patientName" to (auth.currentUser?.displayName ?: "Patient"),
+                "familyMemberName" to familyMemberName,
+                "centerId" to center.id,
+                "centerName" to center.name,
+                "testId" to test.id,
+                "testName" to test.name,
+                "testCategory" to test.category,
+                "scheduledDate" to scheduledDate,
+                "scheduledTime" to scheduledTime,
+                "collectionType" to collectionType,
+                "collectionAddress" to collectionAddress,
+                "status" to "BOOKED",
+                "resultSummary" to if (collectionType == "HOME_COLLECTION") {
+                    "Phlebotomist assigned for home pickup ($scheduledTime)."
+                } else {
+                    "Lab visit confirmed. Follow test prep guidelines."
+                },
+                "abnormalFlag" to false,
+                "cost" to test.price,
+                "paymentStatus" to paymentStatus,
+                "paymentMethod" to paymentMethod,
+                "createdAt" to FieldValue.serverTimestamp(),
+                "updatedAt" to FieldValue.serverTimestamp()
+            )
+        ).await()
+
+        recordPaymentInternal(
+            title = "Lab Test: ${test.name}",
+            providerName = center.name,
+            category = "DIAGNOSTIC",
+            billingForName = familyMemberName,
+            amount = test.price,
+            paymentMethod = paymentMethod,
+            status = paymentStatus
+        )
+
+        createNotification(
+            title = if (collectionType == "HOME_COLLECTION") "Home Sample Collection Scheduled" else "Diagnostic Test Booked",
+            message = "${test.name} for $familyMemberName on $scheduledDate ($scheduledTime) at ${center.name}.",
+            category = "LAB"
+        )
+    }
+
+    suspend fun rescheduleDiagnosticBooking(bookingId: String, newDate: String, newTime: String) {
+        db.collection("diagnostic_bookings").document(bookingId).update(
+            mapOf(
+                "scheduledDate" to newDate,
+                "scheduledTime" to newTime,
+                "status" to "BOOKED",
+                "updatedAt" to FieldValue.serverTimestamp()
+            )
+        ).await()
+        createNotification(
+            title = "Lab Booking Rescheduled",
+            message = "Diagnostic test slot updated to $newDate ($newTime).",
+            category = "LAB"
+        )
+    }
+
+    suspend fun cancelDiagnosticBooking(bookingId: String) {
+        db.collection("diagnostic_bookings").document(bookingId).update(
+            mapOf(
+                "status" to "CANCELLED",
+                "updatedAt" to FieldValue.serverTimestamp()
+            )
+        ).await()
+        createNotification(
+            title = "Diagnostic Booking Cancelled",
+            message = "Your diagnostic test booking has been cancelled.",
+            category = "LAB"
+        )
+    }
+
+    // -------------------------------------------------------------
+    // HOME HEALTHCARE SERVICES
+    // -------------------------------------------------------------
+    fun observeHomeCareBookings(): Flow<List<HomeCareBooking>> = flow {
+        val uid = requireUserId()
+        db.collection("home_care_bookings")
+            .whereEqualTo("patientId", uid)
+            .snapshots()
+            .map { it.toObjects(HomeCareBooking::class.java) }
+            .catch { error ->
+                if (error is CancellationException) throw error
+                Log.w("HealthcareRepo", "Error observing home care bookings: ${error.message}")
+                emit(emptyList())
+            }
+            .collect { emit(it) }
+    }
+
+    suspend fun bookHomeCare(
+        service: HomeCareService,
+        memberName: String,
+        visitAddress: String,
+        scheduledDate: String,
+        timeWindow: String,
+        notes: String,
+        paymentMethod: String
+    ) {
+        val uid = requireUserId()
+        val docRef = db.collection("home_care_bookings").document()
+        val paymentStatus = if (paymentMethod.contains("Doorstep", ignoreCase = true)) "PAY_AT_COUNTER" else "PAID"
+        docRef.set(
+            mapOf(
+                "patientId" to uid,
+                "patientName" to (auth.currentUser?.displayName ?: "Patient"),
+                "memberName" to memberName,
+                "serviceId" to service.id,
+                "serviceTitle" to service.title,
+                "serviceCategory" to service.category,
+                "providerTeam" to service.providerTeam,
+                "visitAddress" to visitAddress,
+                "scheduledDate" to scheduledDate,
+                "timeWindow" to timeWindow,
+                "notes" to notes,
+                "status" to "SCHEDULED",
+                "cost" to service.price,
+                "paymentStatus" to paymentStatus,
+                "createdAt" to FieldValue.serverTimestamp(),
+                "updatedAt" to FieldValue.serverTimestamp()
+            )
+        ).await()
+
+        recordPaymentInternal(
+            title = "Home Care: ${service.title}",
+            providerName = service.providerTeam,
+            category = "HOME_CARE",
+            billingForName = memberName,
+            amount = service.price,
+            paymentMethod = paymentMethod,
+            status = paymentStatus
+        )
+
+        createNotification(
+            title = "Home Healthcare Scheduled",
+            message = "${service.title} for $memberName on $scheduledDate ($timeWindow).",
+            category = "BOOKING"
+        )
+    }
+
+    suspend fun rescheduleHomeCare(bookingId: String, newDate: String, newWindow: String) {
+        db.collection("home_care_bookings").document(bookingId).update(
+            mapOf(
+                "scheduledDate" to newDate,
+                "timeWindow" to newWindow,
+                "status" to "SCHEDULED",
+                "updatedAt" to FieldValue.serverTimestamp()
+            )
+        ).await()
+        createNotification(
+            title = "Home Care Rescheduled",
+            message = "Home healthcare visit updated to $newDate ($newWindow).",
+            category = "BOOKING"
+        )
+    }
+
+    suspend fun cancelHomeCare(bookingId: String) {
+        db.collection("home_care_bookings").document(bookingId).update(
             mapOf(
                 "status" to "CANCELLED",
                 "updatedAt" to FieldValue.serverTimestamp()
@@ -173,23 +497,31 @@ class HealthcareRepository(private val db: FirebaseFirestore) {
     ): String {
         val uid = requireUserId()
         val docRef = db.collection("ambulance_requests").document()
-        val payload = mapOf(
-            "patientId" to uid,
-            "patientName" to (auth.currentUser?.displayName ?: "Emergency Patient"),
-            "patientPhone" to patientPhone,
-            "pickupAddress" to pickupAddress,
-            "emergencyType" to emergencyType,
-            "ambulanceType" to ambulanceType,
-            "status" to "DISPATCHED",
-            "vehicleNumber" to "EMS-${(1000..9999).random()}",
-            "driverName" to "Paramedic Team Alpha",
-            "driverPhone" to "+1 (555) 911-0428",
-            "etaMinutes" to 7L,
-            "hospitalDestination" to "Metro Trauma & Cardiac Center",
-            "createdAt" to FieldValue.serverTimestamp(),
-            "updatedAt" to FieldValue.serverTimestamp()
+        val vehicleNo = "EMS-${(1000..9999).random()}"
+        docRef.set(
+            mapOf(
+                "patientId" to uid,
+                "patientName" to (auth.currentUser?.displayName ?: "Emergency Patient"),
+                "patientPhone" to patientPhone,
+                "pickupAddress" to pickupAddress,
+                "emergencyType" to emergencyType,
+                "ambulanceType" to ambulanceType,
+                "status" to "DISPATCHED",
+                "vehicleNumber" to vehicleNo,
+                "driverName" to "Paramedic Team Alpha",
+                "driverPhone" to "+1 (555) 911-0428",
+                "etaMinutes" to 7L,
+                "hospitalDestination" to "Metro General Trauma & Cardiac Center",
+                "createdAt" to FieldValue.serverTimestamp(),
+                "updatedAt" to FieldValue.serverTimestamp()
+            )
+        ).await()
+
+        createNotification(
+            title = "Emergency Ambulance Dispatched",
+            message = "Unit $vehicleNo ($ambulanceType) en route to $pickupAddress. ETA 7 mins.",
+            category = "EMERGENCY"
         )
-        docRef.set(payload).await()
         return docRef.id
     }
 
@@ -198,56 +530,183 @@ class HealthcareRepository(private val db: FirebaseFirestore) {
             "status" to status,
             "updatedAt" to FieldValue.serverTimestamp()
         )
-        if (etaMinutes > 0) {
-            updates["etaMinutes"] = etaMinutes
-        }
+        if (etaMinutes > 0) updates["etaMinutes"] = etaMinutes
         db.collection("ambulance_requests").document(requestId).update(updates).await()
     }
 
     // -------------------------------------------------------------
-    // DIAGNOSTIC LABS
+    // PAYMENTS & RECEIPTS
     // -------------------------------------------------------------
-    fun observePatientDiagnosticBookings(): Flow<List<DiagnosticBooking>> = flow {
+    fun observePaymentRecords(): Flow<List<PaymentRecord>> = flow {
         val uid = requireUserId()
-        db.collection("diagnostic_bookings")
+        db.collection("payments")
             .whereEqualTo("patientId", uid)
             .snapshots()
-            .map { it.toObjects(DiagnosticBooking::class.java) }
+            .map { it.toObjects(PaymentRecord::class.java) }
             .catch { error ->
                 if (error is CancellationException) throw error
-                Log.w("HealthcareRepo", "Error observing diagnostic bookings: ${error.message}")
+                Log.w("HealthcareRepo", "Error observing payments: ${error.message}")
                 emit(emptyList())
             }
             .collect { emit(it) }
     }
 
-    suspend fun bookDiagnosticTest(
-        center: DiagnosticCenter,
-        test: DiagnosticTest,
-        scheduledDate: String,
-        collectionType: String
+    private suspend fun recordPaymentInternal(
+        title: String,
+        providerName: String,
+        category: String,
+        billingForName: String,
+        amount: Double,
+        paymentMethod: String,
+        status: String
     ) {
         val uid = requireUserId()
-        val docRef = db.collection("diagnostic_bookings").document()
-        val payload = mapOf(
-            "patientId" to uid,
-            "patientName" to (auth.currentUser?.displayName ?: "Patient"),
-            "centerId" to center.id,
-            "centerName" to center.name,
-            "testId" to test.id,
-            "testName" to test.name,
-            "testCategory" to test.category,
-            "scheduledDate" to scheduledDate,
-            "scheduledTime" to "09:00 AM",
-            "collectionType" to collectionType,
-            "status" to "BOOKED",
-            "resultSummary" to "Sample scheduled. Results will appear once analyzed.",
-            "abnormalFlag" to false,
-            "cost" to test.price,
-            "createdAt" to FieldValue.serverTimestamp(),
-            "updatedAt" to FieldValue.serverTimestamp()
+        val txnRef = "TXN-${(100000..999999).random()}"
+        db.collection("payments").document().set(
+            mapOf(
+                "patientId" to uid,
+                "title" to title,
+                "providerName" to providerName,
+                "category" to category,
+                "billingForName" to billingForName,
+                "amount" to amount,
+                "paymentMethod" to paymentMethod,
+                "status" to status,
+                "transactionRef" to txnRef,
+                "createdAt" to FieldValue.serverTimestamp()
+            )
+        ).await()
+    }
+
+    // -------------------------------------------------------------
+    // NOTIFICATIONS
+    // -------------------------------------------------------------
+    fun observeNotifications(): Flow<List<AppNotification>> = flow {
+        val uid = requireUserId()
+        db.collection("notifications")
+            .whereEqualTo("patientId", uid)
+            .snapshots()
+            .map { snap ->
+                snap.toObjects(AppNotification::class.java)
+                    .sortedByDescending { it.createdAt?.seconds ?: 0L }
+            }
+            .catch { error ->
+                if (error is CancellationException) throw error
+                Log.w("HealthcareRepo", "Error observing notifications: ${error.message}")
+                emit(emptyList())
+            }
+            .collect { emit(it) }
+    }
+
+    suspend fun createNotification(title: String, message: String, category: String) {
+        val uid = auth.currentUser?.uid ?: return
+        try {
+            db.collection("notifications").document().set(
+                mapOf(
+                    "patientId" to uid,
+                    "title" to title,
+                    "message" to message,
+                    "category" to category,
+                    "isRead" to false,
+                    "createdAt" to FieldValue.serverTimestamp()
+                )
+            ).await()
+        } catch (e: Exception) {
+            Log.w("HealthcareRepo", "Notification insert warning: ${e.message}")
+        }
+    }
+
+    suspend fun markNotificationRead(notificationId: String) {
+        db.collection("notifications").document(notificationId).update("isRead", true).await()
+    }
+
+    suspend fun markAllNotificationsRead(ids: List<String>) {
+        ids.forEach { id ->
+            try {
+                db.collection("notifications").document(id).update("isRead", true).await()
+            } catch (_: Exception) {
+            }
+        }
+    }
+
+    // -------------------------------------------------------------
+    // REVIEWS
+    // -------------------------------------------------------------
+    fun observeReviews(): Flow<List<Review>> = flow {
+        requireUserId()
+        db.collection("reviews")
+            .snapshots()
+            .map { snap ->
+                snap.toObjects(Review::class.java)
+                    .sortedByDescending { it.createdAt?.seconds ?: 0L }
+            }
+            .catch { error ->
+                if (error is CancellationException) throw error
+                Log.w("HealthcareRepo", "Error observing reviews: ${error.message}")
+                emit(emptyList())
+            }
+            .collect { emit(it) }
+    }
+
+    suspend fun submitReview(
+        targetId: String,
+        targetName: String,
+        targetType: String,
+        rating: Int,
+        comment: String
+    ) {
+        val uid = requireUserId()
+        db.collection("reviews").document().set(
+            mapOf(
+                "patientId" to uid,
+                "patientName" to (auth.currentUser?.displayName ?: "Verified Patient"),
+                "targetId" to targetId,
+                "targetName" to targetName,
+                "targetType" to targetType,
+                "rating" to rating,
+                "comment" to comment,
+                "createdAt" to FieldValue.serverTimestamp()
+            )
+        ).await()
+    }
+
+    // -------------------------------------------------------------
+    // HELP & SUPPORT TICKETS
+    // -------------------------------------------------------------
+    fun observeSupportTickets(): Flow<List<SupportTicket>> = flow {
+        val uid = requireUserId()
+        db.collection("support_tickets")
+            .whereEqualTo("patientId", uid)
+            .snapshots()
+            .map { snap ->
+                snap.toObjects(SupportTicket::class.java)
+                    .sortedByDescending { it.createdAt?.seconds ?: 0L }
+            }
+            .catch { error ->
+                if (error is CancellationException) throw error
+                Log.w("HealthcareRepo", "Error observing support tickets: ${error.message}")
+                emit(emptyList())
+            }
+            .collect { emit(it) }
+    }
+
+    suspend fun submitSupportTicket(category: String, subject: String, description: String) {
+        val uid = requireUserId()
+        db.collection("support_tickets").document().set(
+            mapOf(
+                "patientId" to uid,
+                "category" to category,
+                "subject" to subject,
+                "description" to description,
+                "status" to "OPEN",
+                "createdAt" to FieldValue.serverTimestamp()
+            )
+        ).await()
+        createNotification(
+            title = "Support Ticket Created",
+            message = "Ticket '$subject' ($category) received. Care support responds within 2 hours.",
+            category = "SUPPORT"
         )
-        docRef.set(payload).await()
     }
 
     // -------------------------------------------------------------
@@ -270,23 +729,29 @@ class HealthcareRepository(private val db: FirebaseFirestore) {
     suspend fun submitInsuranceClaim(claim: InsuranceClaim) {
         val uid = requireUserId()
         val docRef = db.collection("insurance_claims").document()
-        val payload = mapOf(
-            "patientId" to uid,
-            "patientName" to (auth.currentUser?.displayName ?: "Policy Holder"),
-            "policyNumber" to claim.policyNumber,
-            "insuranceProvider" to claim.insuranceProvider,
-            "hospitalName" to claim.hospitalName,
-            "procedureName" to claim.procedureName,
-            "claimedAmount" to claim.claimedAmount,
-            "approvedAmount" to 0.0,
-            "status" to "SUBMITTED",
-            "claimType" to claim.claimType,
-            "documentReference" to claim.documentReference,
-            "reviewerNotes" to "Under initial verification by claims team.",
-            "createdAt" to FieldValue.serverTimestamp(),
-            "updatedAt" to FieldValue.serverTimestamp()
+        docRef.set(
+            mapOf(
+                "patientId" to uid,
+                "patientName" to (auth.currentUser?.displayName ?: "Policy Holder"),
+                "policyNumber" to claim.policyNumber,
+                "insuranceProvider" to claim.insuranceProvider,
+                "hospitalName" to claim.hospitalName,
+                "procedureName" to claim.procedureName,
+                "claimedAmount" to claim.claimedAmount,
+                "approvedAmount" to 0.0,
+                "status" to "SUBMITTED",
+                "claimType" to claim.claimType,
+                "documentReference" to claim.documentReference,
+                "reviewerNotes" to "Under initial verification by claims team.",
+                "createdAt" to FieldValue.serverTimestamp(),
+                "updatedAt" to FieldValue.serverTimestamp()
+            )
+        ).await()
+        createNotification(
+            title = "Insurance Claim Submitted",
+            message = "Cashless claim for ${claim.procedureName} ($${claim.claimedAmount}) submitted.",
+            category = "PAYMENT"
         )
-        docRef.set(payload).await()
     }
 
     // -------------------------------------------------------------
@@ -309,19 +774,21 @@ class HealthcareRepository(private val db: FirebaseFirestore) {
     suspend fun addMedicalRecord(record: MedicalRecord) {
         val uid = requireUserId()
         val docRef = db.collection("medical_records").document()
-        val payload = mapOf(
-            "patientId" to uid,
-            "title" to record.title,
-            "category" to record.category,
-            "doctorOrFacility" to record.doctorOrFacility,
-            "recordDate" to record.recordDate,
-            "summary" to record.summary,
-            "keyMetrics" to record.keyMetrics,
-            "fileType" to record.fileType,
-            "createdAt" to FieldValue.serverTimestamp(),
-            "updatedAt" to FieldValue.serverTimestamp()
-        )
-        docRef.set(payload).await()
+        docRef.set(
+            mapOf(
+                "patientId" to uid,
+                "memberName" to record.memberName,
+                "title" to record.title,
+                "category" to record.category,
+                "doctorOrFacility" to record.doctorOrFacility,
+                "recordDate" to record.recordDate,
+                "summary" to record.summary,
+                "keyMetrics" to record.keyMetrics,
+                "fileType" to record.fileType,
+                "createdAt" to FieldValue.serverTimestamp(),
+                "updatedAt" to FieldValue.serverTimestamp()
+            )
+        ).await()
     }
 
     // -------------------------------------------------------------
@@ -350,412 +817,19 @@ class HealthcareRepository(private val db: FirebaseFirestore) {
     ) {
         val uid = requireUserId()
         val docRef = db.collection("chat_messages").document()
-        val payload = mapOf(
-            "consultationId" to consultationId,
-            "senderId" to uid,
-            "senderName" to (auth.currentUser?.displayName ?: "Patient"),
-            "senderRole" to "PATIENT",
-            "recipientId" to recipientId,
-            "recipientName" to recipientName,
-            "message" to message,
-            "isRead" to false,
-            "messageType" to messageType,
-            "createdAt" to FieldValue.serverTimestamp()
-        )
-        docRef.set(payload).await()
+        docRef.set(
+            mapOf(
+                "consultationId" to consultationId,
+                "senderId" to uid,
+                "senderName" to (auth.currentUser?.displayName ?: "Patient"),
+                "senderRole" to "PATIENT",
+                "recipientId" to recipientId,
+                "recipientName" to recipientName,
+                "message" to message,
+                "isRead" to false,
+                "messageType" to messageType,
+                "createdAt" to FieldValue.serverTimestamp()
+            )
+        ).await()
     }
-
-    // -------------------------------------------------------------
-    // CURATED PATIENT CATALOG: SPECIALISTS, HOSPITALS, LABS, GUIDES
-    // -------------------------------------------------------------
-    fun getPopularSpecialties(): List<MedicalSpecialtyItem> = listOf(
-        MedicalSpecialtyItem("spec_cardio", "Cardiology", "Heart & Vascular", 14),
-        MedicalSpecialtyItem("spec_neuro", "Neurology", "Brain & Spine", 9),
-        MedicalSpecialtyItem("spec_ortho", "Orthopedics", "Bone & Joint", 11),
-        MedicalSpecialtyItem("spec_pedia", "Pediatrics", "Child Health", 16),
-        MedicalSpecialtyItem("spec_derm", "Dermatology", "Skin & Hair", 8),
-        MedicalSpecialtyItem("spec_gen", "General Medicine", "Primary Care", 22)
-    )
-
-    fun getNearbyHospitalsAndCenters(): List<NearbyFacility> = listOf(
-        NearbyFacility(
-            id = "hosp_metro_trauma",
-            name = "Metro General Trauma & Cardiac Center",
-            facilityType = "HOSPITAL",
-            address = "742 Medical Plaza Drive",
-            distanceKm = 1.2,
-            rating = 4.9,
-            reviewCount = 840,
-            isOpen24x7 = true,
-            hasEmergencyUnit = true,
-            providesHomeCollection = false,
-            departments = listOf("24/7 ER & Trauma", "Cardiology", "Neurology", "ICU"),
-            waitTimeMinutes = 12
-        ),
-        NearbyFacility(
-            id = "center_1",
-            name = "Metro Health Advanced Imaging & Diagnostics",
-            facilityType = "DIAGNOSTIC_CENTER",
-            address = "450 Health Sciences Drive",
-            distanceKm = 1.8,
-            rating = 4.9,
-            reviewCount = 412,
-            isOpen24x7 = false,
-            hasEmergencyUnit = false,
-            providesHomeCollection = true,
-            departments = listOf("3T MRI", "CT Scan", "Lipid & Blood Panels", "ECG"),
-            waitTimeMinutes = 10
-        ),
-        NearbyFacility(
-            id = "hosp_activelife",
-            name = "ActiveLife Sports & Orthopedic Hospital",
-            facilityType = "HOSPITAL",
-            address = "310 Valley Boulevard",
-            distanceKm = 2.6,
-            rating = 4.8,
-            reviewCount = 520,
-            isOpen24x7 = true,
-            hasEmergencyUnit = true,
-            providesHomeCollection = false,
-            departments = listOf("Orthopedics", "Physiotherapy", "Sports Surgery", "X-Ray"),
-            waitTimeMinutes = 15
-        ),
-        NearbyFacility(
-            id = "center_2",
-            name = "BioPath Premier Clinical Laboratories",
-            facilityType = "DIAGNOSTIC_CENTER",
-            address = "780 Commerce Court, Suite 102",
-            distanceKm = 3.2,
-            rating = 4.8,
-            reviewCount = 630,
-            isOpen24x7 = false,
-            hasEmergencyUnit = false,
-            providesHomeCollection = true,
-            departments = listOf("Home Phlebotomy", "HbA1c & Diabetes", "Ultrasound", "Pathology"),
-            waitTimeMinutes = 5
-        )
-    )
-
-    fun getLocalSpecialists(): List<Specialist> = listOf(
-        Specialist(
-            id = "doc_cardio_1",
-            name = "Dr. Elena Rostova, MD",
-            title = "Senior Interventional Cardiologist",
-            specialty = "Cardiology",
-            experienceYears = 16,
-            rating = 4.9,
-            reviewCount = 312,
-            clinicHospital = "Metro General Trauma & Cardiac Center",
-            address = "742 Medical Plaza, Suite 400",
-            fee = 140.0,
-            nextAvailableSlot = "Tomorrow at 10:30 AM",
-            bio = "Board-certified in cardiovascular disease and interventional cardiology with specialization in arrhythmia and preventive care."
-        ),
-        Specialist(
-            id = "doc_neuro_2",
-            name = "Dr. Marcus Chen, MD, PhD",
-            title = "Consultant Neurologist & Spine Specialist",
-            specialty = "Neurology",
-            experienceYears = 14,
-            rating = 4.8,
-            reviewCount = 245,
-            clinicHospital = "Metro Brain & Spine Neuroscience Center",
-            address = "890 Innovation Parkway, Tower B",
-            fee = 160.0,
-            nextAvailableSlot = "Thursday at 02:00 PM",
-            bio = "Expert in complex migraine disorders, neuropathy, neuro-rehab, and pre-op cranial assessments."
-        ),
-        Specialist(
-            id = "doc_ortho_3",
-            name = "Dr. Sarah Jenkins, MD",
-            title = "Orthopedic Surgeon & Joint Replacement",
-            specialty = "Orthopedics",
-            experienceYears = 12,
-            rating = 4.9,
-            reviewCount = 189,
-            clinicHospital = "ActiveLife Sports & Orthopedic Hospital",
-            address = "310 Valley Boulevard",
-            fee = 130.0,
-            nextAvailableSlot = "Friday at 09:00 AM",
-            bio = "Specializes in minimally invasive arthroscopy, sports injury rehabilitation, and knee/hip joint replacements."
-        ),
-        Specialist(
-            id = "doc_pedia_4",
-            name = "Dr. Tariq Al-Mansoor, MD",
-            title = "Pediatrician & Adolescent Health",
-            specialty = "Pediatrics",
-            experienceYears = 10,
-            rating = 4.9,
-            reviewCount = 420,
-            clinicHospital = "Children's Health Pavilion",
-            address = "120 Park Lane, Children's Wing",
-            fee = 95.0,
-            nextAvailableSlot = "Today at 04:30 PM",
-            bio = "Warm, attentive care specializing in pediatric developmental milestones, vaccinations, and childhood respiratory allergies."
-        ),
-        Specialist(
-            id = "doc_derm_6",
-            name = "Dr. Priya Nair, MD",
-            title = "Clinical & Cosmetic Dermatologist",
-            specialty = "Dermatology",
-            experienceYears = 11,
-            rating = 4.9,
-            reviewCount = 278,
-            clinicHospital = "Metro Skin & Wellness Clinic",
-            address = "215 Oakridge Avenue, Suite 2B",
-            fee = 115.0,
-            nextAvailableSlot = "Tomorrow at 02:00 PM",
-            bio = "Focused on eczema, acne therapy, mole mapping, and minimally invasive dermatologic procedures."
-        ),
-        Specialist(
-            id = "doc_gen_5",
-            name = "Dr. Rachel Adams, DO",
-            title = "General Medicine & Internal Health",
-            specialty = "General Medicine",
-            experienceYears = 8,
-            rating = 4.7,
-            reviewCount = 510,
-            clinicHospital = "Metro Family Health Center",
-            address = "55 Highland Road",
-            fee = 75.0,
-            nextAvailableSlot = "Today at 06:00 PM",
-            bio = "Comprehensive primary healthcare, chronic diabetes and hypertension management, and annual wellness screenings."
-        )
-    )
-
-    fun getLocalDiagnosticCenters(): List<DiagnosticCenter> = listOf(
-        DiagnosticCenter(
-            id = "center_1",
-            name = "Metro Health Advanced Imaging & Diagnostics",
-            address = "450 Health Sciences Drive",
-            distanceKm = 1.8,
-            rating = 4.9,
-            providesHomeCollection = true,
-            testsOffered = listOf(
-                DiagnosticTest(
-                    id = "test_1",
-                    name = "Comprehensive Metabolic & Lipid Panel",
-                    category = "BLOOD_WORK",
-                    sampleType = "Fasting Venous Blood",
-                    turnaroundTime = "12 Hours",
-                    preparationSummary = "Fast for 10-12 hours prior. Water permitted.",
-                    price = 45.0
-                ),
-                DiagnosticTest(
-                    id = "test_2",
-                    name = "High-Resolution Cardiac MRI with Contrast",
-                    category = "RADIOLOGY",
-                    sampleType = "3T MRI Imaging Scan",
-                    turnaroundTime = "24 Hours",
-                    preparationSummary = "Remove all metallic objects, jewelry, and credit cards. Fast 4 hours before.",
-                    price = 320.0
-                ),
-                DiagnosticTest(
-                    id = "test_3",
-                    name = "12-Lead Resting & Stress ECG",
-                    category = "CARDIOLOGY",
-                    sampleType = "Electrophysiological Trace",
-                    turnaroundTime = "Instant (30 Mins)",
-                    preparationSummary = "Wear comfortable loose two-piece clothing.",
-                    price = 60.0
-                )
-            )
-        ),
-        DiagnosticCenter(
-            id = "center_2",
-            name = "BioPath Premier Clinical Laboratories",
-            address = "780 Commerce Court, Suite 102",
-            distanceKm = 3.2,
-            rating = 4.8,
-            providesHomeCollection = true,
-            testsOffered = listOf(
-                DiagnosticTest(
-                    id = "test_4",
-                    name = "HbA1c & Fasting Insulin Glycemic Index",
-                    category = "BLOOD_WORK",
-                    sampleType = "Blood Sample",
-                    turnaroundTime = "6 Hours",
-                    preparationSummary = "No fasting strictly required for HbA1c; 8h fasting for insulin.",
-                    price = 35.0
-                ),
-                DiagnosticTest(
-                    id = "test_5",
-                    name = "Whole Abdomen & Pelvic Ultrasound",
-                    category = "RADIOLOGY",
-                    sampleType = "Ultrasound Scan",
-                    turnaroundTime = "Same Day",
-                    preparationSummary = "Drink 1 liter of water 1 hour before and do not urinate until scan.",
-                    price = 85.0
-                )
-            )
-        )
-    )
-
-    fun getProcedureGuides(): List<ProcedureGuide> = listOf(
-        ProcedureGuide(
-            id = "proc_endoscopy",
-            title = "Upper Gastrointestinal (GI) Endoscopy",
-            category = "ENDOSCOPIC",
-            summary = "A visual examination of the esophagus, stomach, and duodenum using a thin, flexible endoscope camera.",
-            estimatedDuration = "20 to 30 minutes",
-            anesthesiaType = "Intravenous conscious sedation (propofol / midazolam)",
-            recoveryDays = 1,
-            preparationChecklist = listOf(
-                ProcedureChecklistStep(
-                    stepId = "endo_1",
-                    title = "Blood Thinner & Anticoagulant Protocol",
-                    detail = "Consult prescribing doctor regarding halting aspirin, warfarin, or apixaban 5-7 days prior.",
-                    timing = "7 Days Before"
-                ),
-                ProcedureChecklistStep(
-                    stepId = "endo_2",
-                    title = "Strict Fasting from Solid Food",
-                    detail = "Do not eat solid foods after midnight or for at least 8 hours prior to procedure time.",
-                    timing = "Midnight Before"
-                ),
-                ProcedureChecklistStep(
-                    stepId = "endo_3",
-                    title = "Clear Liquid Cut-off",
-                    detail = "Stop drinking clear liquids (water, apple juice) exactly 3 hours before check-in.",
-                    timing = "3 Hours Before"
-                ),
-                ProcedureChecklistStep(
-                    stepId = "endo_4",
-                    title = "Designated Responsible Adult Driver",
-                    detail = "Arrange for an adult companion to drive you home; driving or signing legal documents is prohibited for 24h.",
-                    timing = "Day of Procedure"
-                )
-            ),
-            procedureOverview = "You will lie comfortably on your left side. A mouthguard protects your teeth. Anesthesia is administered intravenously, causing gentle sleep. The physician gently advances the scope, examining mucosal lining and taking micro-biopsies if needed without pain.",
-            postCareInstructions = listOf(
-                "Rest quietly at home for the remainder of the day.",
-                "Start with gentle sips of water, then clear broths and crackers once swallowing reflexes return fully.",
-                "A mild throat tickle or transient belching is normal and resolves within 24 hours.",
-                "Do not drive, operate machinery, or consume alcohol for 24 hours after sedation."
-            ),
-            warningRedFlags = listOf(
-                "Difficulty or sharp pain swallowing that worsens after 4 hours",
-                "Fever greater than 101°F (38.3°C) or persistent chills",
-                "Vomiting dark coffee-ground material or bright blood",
-                "Severe, worsening abdominal or chest pain"
-            )
-        ),
-        ProcedureGuide(
-            id = "proc_mri_contrast",
-            title = "MRI Scan with Gadolinium Contrast",
-            category = "DIAGNOSTIC_IMAGING",
-            summary = "Non-invasive magnetic resonance scan utilizing safe gadolinium contrast agent to highlight vascular and tissue pathology.",
-            estimatedDuration = "45 to 60 minutes",
-            anesthesiaType = "None (optional mild oral anxiolytic for claustrophobia)",
-            recoveryDays = 0,
-            preparationChecklist = listOf(
-                ProcedureChecklistStep(
-                    stepId = "mri_1",
-                    title = "Implant & Metal Safety Screening",
-                    detail = "Report any cardiac pacemakers, cochlear implants, aneurysm clips, metal dental implants, or shrapnel.",
-                    timing = "At Booking"
-                ),
-                ProcedureChecklistStep(
-                    stepId = "mri_2",
-                    title = "Kidney Function Check (eGFR)",
-                    detail = "Ensure blood creatinine/eGFR results from within past 30 days are uploaded to your locker.",
-                    timing = "3 Days Before"
-                ),
-                ProcedureChecklistStep(
-                    stepId = "mri_3",
-                    title = "Remove All Body Jewelry & Wear Cotton",
-                    detail = "Remove piercings, watches, belts, underwire bras, and hairpins. Wear plain athletic clothing without metal zippers.",
-                    timing = "Morning of Scan"
-                )
-            ),
-            procedureOverview = "You lie on a cushioned scanner table that slides into the magnetic bore. You will wear noise-cancelling headphones playing music or guidance. An IV line provides contrast during the second half of the sequence.",
-            postCareInstructions = listOf(
-                "Drink 2-3 extra glasses of water throughout the day to help your kidneys rapidly flush the contrast agent.",
-                "Resume your normal daily diet and medications immediately.",
-                "Reports will be processed and visible in your CarePulse Locker within 24 hours."
-            ),
-            warningRedFlags = listOf(
-                "Hives, generalized itching, or skin redness",
-                "Swelling around eyes, lips, or throat",
-                "Sudden dizziness or shortness of breath (call Emergency EMS immediately)"
-            )
-        ),
-        ProcedureGuide(
-            id = "proc_knee_arthroscopy",
-            title = "Knee Arthroscopy & Meniscal Repair",
-            category = "SURGICAL",
-            summary = "Minimally invasive keyhole surgical repair of torn meniscus cartilage or ligament smoothing inside the knee joint capsule.",
-            estimatedDuration = "60 to 90 minutes",
-            anesthesiaType = "General or Spinal Anesthesia with femoral nerve block",
-            recoveryDays = 7,
-            preparationChecklist = listOf(
-                ProcedureChecklistStep(
-                    stepId = "knee_1",
-                    title = "Pre-operative Clearance & Lab Panel",
-                    detail = "Complete pre-op ECG, CBC blood panel, and anesthesia review at the hospital clinic.",
-                    timing = "5 Days Before"
-                ),
-                ProcedureChecklistStep(
-                    stepId = "knee_2",
-                    title = "Crutches & Ice Machine Preparation",
-                    detail = "Adjust assistive crutches to standing height and fill freezer with gel packs for cold compression.",
-                    timing = "2 Days Before"
-                ),
-                ProcedureChecklistStep(
-                    stepId = "knee_3",
-                    title = "Antimicrobial Hibiclens Shower",
-                    detail = "Wash operative leg with chlorhexidine antiseptic soap the evening and morning before surgery.",
-                    timing = "Night & Morning Before"
-                )
-            ),
-            procedureOverview = "Small 5mm incisions allow the arthroscope and precision instruments to enter the knee joint. Sterile fluid distends the joint while high-definition cameras guide the surgeon to trim or suture torn cartilage cleanly.",
-            postCareInstructions = listOf(
-                "Practice R.I.C.E protocol: Rest, Ice (20 min on, 20 min off), Compression bandage, and Elevation above heart level.",
-                "Keep surgical dressings completely dry for 72 hours. Use shower leg bags.",
-                "Perform prescribed ankle pumps every hour while awake to promote healthy venous circulation.",
-                "Take prescribed anti-inflammatory and pain medications strictly with meals."
-            ),
-            warningRedFlags = listOf(
-                "Calf pain, significant swelling, or warmth behind the leg (sign of DVT)",
-                "Fever above 101.5°F or spreading redness around incision portals",
-                "Sudden chest pain or shortness of breath",
-                "Uncontrolled severe pain unresponsive to prescribed medication"
-            )
-        ),
-        ProcedureGuide(
-            id = "proc_cataract",
-            title = "Cataract Extraction with Intraocular Lens (IOL)",
-            category = "SURGICAL",
-            summary = "Gentle ultrasonic phacoemulsification removal of cloudy crystalline lens replaced with a high-definition foldable intraocular lens.",
-            estimatedDuration = "15 to 20 minutes",
-            anesthesiaType = "Topical numbing eye drops with light IV relaxation",
-            recoveryDays = 2,
-            preparationChecklist = listOf(
-                ProcedureChecklistStep(
-                    stepId = "cat_1",
-                    title = "Antibiotic Eye Drop Regimen",
-                    detail = "Begin prescribed topical antibiotic and anti-inflammatory eye drops 3 days prior as instructed.",
-                    timing = "3 Days Before"
-                ),
-                ProcedureChecklistStep(
-                    stepId = "cat_2",
-                    title = "No Face Makeup or Perfumes",
-                    detail = "Wash face thoroughly with gentle soap. Do not apply eye shadow, eyeliner, mascara, or face lotions.",
-                    timing = "Morning of Surgery"
-                )
-            ),
-            procedureOverview = "A tiny microscopic incision is made at the corneal edge. Ultrasound waves gently fragment the cloudy cataract lens, which is vacuumed away. A clear premium acrylic intraocular lens is then unfolded in place.",
-            postCareInstructions = listOf(
-                "Wear protective eye shield during sleep for the first week to prevent accidental rubbing.",
-                "Avoid bending over with your head lower than your waist, heavy lifting (>10 lbs), or vigorous exercise.",
-                "Do not get water or shampoo directly into the operated eye for 7 days.",
-                "Instill prescribed post-op steroid and antibiotic eye drops on schedule."
-            ),
-            warningRedFlags = listOf(
-                "Sudden sharp drop in visual clarity or dark curtain sensation",
-                "Severe aching eye pain not relieved by mild analgesics",
-                "Increasing discharge or severe conjunctival redness"
-            )
-        )
-    )
 }

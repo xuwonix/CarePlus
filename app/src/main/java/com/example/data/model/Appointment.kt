@@ -10,6 +10,7 @@ data class Appointment(
     @DocumentId val id: String = "",
     val patientId: String = "",
     val patientName: String = "",
+    val familyMemberName: String = "Self",
     val specialistId: String = "",
     val specialistName: String = "",
     val specialty: String = "",
@@ -21,6 +22,8 @@ data class Appointment(
     val notes: String = "",
     val prescription: String = "",
     val consultationFee: Double = 0.0,
+    val paymentStatus: String = "PAID",
+    val paymentMethod: String = "UPI / Card",
     @ServerTimestamp val createdAt: Timestamp? = null,
     @ServerTimestamp val updatedAt: Timestamp? = null
 )

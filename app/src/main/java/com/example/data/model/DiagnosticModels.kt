@@ -9,7 +9,7 @@ data class DiagnosticTest(
     val id: String,
     val name: String,
     val category: String, // BLOOD_WORK, RADIOLOGY, CARDIOLOGY, PATHOLOGY
-    val sampleType: String, // Blood, Fasting Serum, Imaging Scan, Urine
+    val sampleType: String,
     val turnaroundTime: String,
     val preparationSummary: String,
     val price: Double
@@ -22,6 +22,8 @@ data class DiagnosticCenter(
     val distanceKm: Double,
     val rating: Double,
     val providesHomeCollection: Boolean,
+    val accreditation: String = "NABL & CAP Accredited",
+    val operatingHours: String = "06:30 AM - 09:00 PM",
     val testsOffered: List<DiagnosticTest>
 )
 
@@ -30,6 +32,7 @@ data class DiagnosticBooking(
     @DocumentId val id: String = "",
     val patientId: String = "",
     val patientName: String = "",
+    val familyMemberName: String = "Self",
     val centerId: String = "",
     val centerName: String = "",
     val testId: String = "",
@@ -38,10 +41,13 @@ data class DiagnosticBooking(
     val scheduledDate: String = "",
     val scheduledTime: String = "08:30 AM",
     val collectionType: String = "HOME_COLLECTION", // HOME_COLLECTION, LAB_VISIT
-    val status: String = "BOOKED", // BOOKED, SAMPLE_COLLECTED, RESULTS_READY
+    val collectionAddress: String = "",
+    val status: String = "BOOKED", // BOOKED, SAMPLE_COLLECTED, RESULTS_READY, CANCELLED
     val resultSummary: String = "",
     val abnormalFlag: Boolean = false,
     val cost: Double = 0.0,
+    val paymentStatus: String = "PAID",
+    val paymentMethod: String = "Card •••• 4242",
     @ServerTimestamp val createdAt: Timestamp? = null,
     @ServerTimestamp val updatedAt: Timestamp? = null
 )

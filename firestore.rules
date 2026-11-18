@@ -16,21 +16,31 @@ service cloud.firestore {
       allow write: if isOwner(userId);
     }
 
+    // Family profiles
+    match /family_profiles/{memberId} {
+      allow read: if isAuthenticated() && resource.data.patientId == request.auth.uid;
+      allow create: if isAuthenticated() &&
+                    request.resource.data.patientId == request.auth.uid &&
+                    request.resource.data.name is string &&
+                    request.resource.data.relationship is string;
+      allow update: if isAuthenticated() &&
+                    resource.data.patientId == request.auth.uid &&
+                    request.resource.data.patientId == request.auth.uid;
+      allow delete: if isAuthenticated() && resource.data.patientId == request.auth.uid;
+    }
+
     // Appointments collection
     match /appointments/{appointmentId} {
       allow read: if isAuthenticated() && (
         resource.data.patientId == request.auth.uid ||
-        resource.data.specialistId == request.auth.uid ||
-        request.auth.token.role == 'SPECIALIST'
-      );
-      allow create: if isAuthenticated() && (
-        request.resource.data.patientId == request.auth.uid ||
-        request.resource.data.specialistId == request.auth.uid
-      ) && isValidAppointment(request.resource.data);
-      allow update: if isAuthenticated() && (
-        resource.data.patientId == request.auth.uid ||
         resource.data.specialistId == request.auth.uid
-      ) && isValidAppointment(request.resource.data);
+      );
+      allow create: if isAuthenticated() &&
+                    request.resource.data.patientId == request.auth.uid &&
+                    isValidAppointment(request.resource.data);
+      allow update: if isAuthenticated() &&
+                    resource.data.patientId == request.auth.uid &&
+                    isValidAppointment(request.resource.data);
       allow delete: if isAuthenticated() && resource.data.patientId == request.auth.uid;
     }
 
@@ -44,11 +54,11 @@ service cloud.firestore {
 
     // Ambulance requests
     match /ambulance_requests/{requestId} {
-      allow read: if isAuthenticated();
+      allow read: if isAuthenticated() && resource.data.patientId == request.auth.uid;
       allow create: if isAuthenticated() &&
                     request.resource.data.patientId == request.auth.uid &&
                     isValidAmbulanceRequest(request.resource.data);
-      allow update: if isAuthenticated();
+      allow update: if isAuthenticated() && resource.data.patientId == request.auth.uid;
       allow delete: if isAuthenticated() && resource.data.patientId == request.auth.uid;
     }
 
@@ -61,11 +71,13 @@ service cloud.firestore {
 
     // Diagnostic test bookings
     match /diagnostic_bookings/{bookingId} {
-      allow read: if isAuthenticated();
+      allow read: if isAuthenticated() && resource.data.patientId == request.auth.uid;
       allow create: if isAuthenticated() &&
                     request.resource.data.patientId == request.auth.uid &&
                     isValidDiagnosticBooking(request.resource.data);
-      allow update: if isAuthenticated();
+      allow update: if isAuthenticated() &&
+                    resource.data.patientId == request.auth.uid &&
+                    isValidDiagnosticBooking(request.resource.data);
       allow delete: if isAuthenticated() && resource.data.patientId == request.auth.uid;
     }
 
@@ -73,16 +85,75 @@ service cloud.firestore {
       return data.patientId is string &&
              data.testName is string &&
              data.scheduledDate is string &&
-             data.status in ['BOOKED', 'SAMPLE_COLLECTED', 'RESULTS_READY'];
+             data.status in ['BOOKED', 'SAMPLE_COLLECTED', 'RESULTS_READY', 'CANCELLED'];
+    }
+
+    // Home healthcare bookings
+    match /home_care_bookings/{bookingId} {
+      allow read: if isAuthenticated() && resource.data.patientId == request.auth.uid;
+      allow create: if isAuthenticated() &&
+                    request.resource.data.patientId == request.auth.uid &&
+                    request.resource.data.serviceTitle is string &&
+                    request.resource.data.status in ['SCHEDULED', 'COMPLETED', 'CANCELLED'];
+      allow update: if isAuthenticated() &&
+                    resource.data.patientId == request.auth.uid &&
+                    request.resource.data.patientId == request.auth.uid &&
+                    request.resource.data.status in ['SCHEDULED', 'COMPLETED', 'CANCELLED'];
+      allow delete: if isAuthenticated() && resource.data.patientId == request.auth.uid;
+    }
+
+    // Payments
+    match /payments/{paymentId} {
+      allow read: if isAuthenticated() && resource.data.patientId == request.auth.uid;
+      allow create: if isAuthenticated() &&
+                    request.resource.data.patientId == request.auth.uid &&
+                    request.resource.data.amount is number &&
+                    request.resource.data.title is string;
+      allow update, delete: if false;
+    }
+
+    // Notifications
+    match /notifications/{notificationId} {
+      allow read: if isAuthenticated() && resource.data.patientId == request.auth.uid;
+      allow create: if isAuthenticated() &&
+                    request.resource.data.patientId == request.auth.uid &&
+                    request.resource.data.title is string;
+      allow update: if isAuthenticated() &&
+                    resource.data.patientId == request.auth.uid &&
+                    request.resource.data.patientId == request.auth.uid;
+      allow delete: if isAuthenticated() && resource.data.patientId == request.auth.uid;
+    }
+
+    // Reviews (readable by all authenticated patients, writable by author)
+    match /reviews/{reviewId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() &&
+                    request.resource.data.patientId == request.auth.uid &&
+                    request.resource.data.targetId is string &&
+                    request.resource.data.rating is number &&
+                    request.resource.data.rating >= 1 &&
+                    request.resource.data.rating <= 5;
+      allow update: if isAuthenticated() && resource.data.patientId == request.auth.uid;
+      allow delete: if isAuthenticated() && resource.data.patientId == request.auth.uid;
+    }
+
+    // Support tickets
+    match /support_tickets/{ticketId} {
+      allow read: if isAuthenticated() && resource.data.patientId == request.auth.uid;
+      allow create: if isAuthenticated() &&
+                    request.resource.data.patientId == request.auth.uid &&
+                    request.resource.data.subject is string;
+      allow update: if isAuthenticated() && resource.data.patientId == request.auth.uid;
+      allow delete: if isAuthenticated() && resource.data.patientId == request.auth.uid;
     }
 
     // Insurance claims
     match /insurance_claims/{claimId} {
-      allow read: if isAuthenticated();
+      allow read: if isAuthenticated() && resource.data.patientId == request.auth.uid;
       allow create: if isAuthenticated() &&
                     request.resource.data.patientId == request.auth.uid &&
                     isValidInsuranceClaim(request.resource.data);
-      allow update: if isAuthenticated();
+      allow update: if isAuthenticated() && resource.data.patientId == request.auth.uid;
       allow delete: if isAuthenticated() && resource.data.patientId == request.auth.uid;
     }
 
