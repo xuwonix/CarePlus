@@ -11,11 +11,11 @@ import com.example.data.model.DiagnosticCenter
 import com.example.data.model.DiagnosticTest
 import com.example.data.model.InsuranceClaim
 import com.example.data.model.MedicalRecord
-import com.example.data.model.ProcedureChecklistStep
+import com.example.data.model.MedicalSpecialtyItem
+import com.example.data.model.NearbyFacility
 import com.example.data.model.ProcedureGuide
 import com.example.data.model.Specialist
 import com.example.data.model.UserProfile
-import com.example.data.model.UserRole
 import com.example.data.repository.HealthcareRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -23,17 +23,24 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
+enum class MainNavTab(val label: String) {
+    HOME("Home"),
+    BOOKING("Booking"),
+    EMERGENCY("Emergency"),
+    RECORDS("Records"),
+    PROFILE("Profile")
+}
+
 data class HealthcareUiState(
-    val currentRole: UserRole = UserRole.PATIENT,
+    val selectedTab: MainNavTab = MainNavTab.HOME,
+    val bookingSubTab: Int = 0, // 0 = Doctors, 1 = Lab Tests, 2 = My Bookings
+    val selectedSpecialtyFilter: String = "All",
+    val searchQuery: String = "",
     val userProfile: UserProfile? = null,
     val patientAppointments: List<Appointment> = emptyList(),
-    val specialistAppointments: List<Appointment> = emptyList(),
     val patientAmbulanceRequests: List<AmbulanceRequest> = emptyList(),
-    val allAmbulanceRequests: List<AmbulanceRequest> = emptyList(),
     val patientDiagnosticBookings: List<DiagnosticBooking> = emptyList(),
-    val allDiagnosticBookings: List<DiagnosticBooking> = emptyList(),
     val patientInsuranceClaims: List<InsuranceClaim> = emptyList(),
-    val allInsuranceClaims: List<InsuranceClaim> = emptyList(),
     val medicalRecords: List<MedicalRecord> = emptyList(),
     val currentChatMessages: List<ChatMessage> = emptyList(),
     val activeConsultationId: String = "consultation_default",
@@ -41,8 +48,9 @@ data class HealthcareUiState(
     val activeRecipientId: String = "doc_cardio_1",
     val specialists: List<Specialist> = emptyList(),
     val diagnosticCenters: List<DiagnosticCenter> = emptyList(),
+    val nearbyFacilities: List<NearbyFacility> = emptyList(),
+    val popularSpecialties: List<MedicalSpecialtyItem> = emptyList(),
     val procedureGuides: List<ProcedureGuide> = emptyList(),
-    val activeProcedureGuide: ProcedureGuide? = null,
     val completedChecklistSteps: Set<String> = emptySet(),
     val isLoading: Boolean = false,
     val feedbackMessage: String? = null
@@ -56,8 +64,9 @@ class CarePulseViewModel(application: Application) : AndroidViewModel(applicatio
         HealthcareUiState(
             specialists = repository.getLocalSpecialists(),
             diagnosticCenters = repository.getLocalDiagnosticCenters(),
-            procedureGuides = repository.getProcedureGuides(),
-            activeProcedureGuide = repository.getProcedureGuides().firstOrNull()
+            nearbyFacilities = repository.getNearbyHospitalsAndCenters(),
+            popularSpecialties = repository.getPopularSpecialties(),
+            procedureGuides = repository.getProcedureGuides()
         )
     )
     val uiState: StateFlow<HealthcareUiState> = _uiState.asStateFlow()
@@ -67,14 +76,12 @@ class CarePulseViewModel(application: Application) : AndroidViewModel(applicatio
     }
 
     private fun initUserData() {
-        val user = repository.getCurrentUser() ?: return
+        repository.getCurrentUser() ?: return
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true) }
-            val profile = repository.getOrCreateUserProfile(UserRole.PATIENT)
-            val role = UserRole.fromString(profile.role)
-            _uiState.update { it.copy(userProfile = profile, currentRole = role, isLoading = false) }
+            val profile = repository.getOrCreateUserProfile()
+            _uiState.update { it.copy(userProfile = profile, isLoading = false) }
 
-            // Observe real-time data flows
             launch {
                 repository.observeUserProfile().collect { updatedProfile ->
                     if (updatedProfile != null) {
@@ -90,20 +97,8 @@ class CarePulseViewModel(application: Application) : AndroidViewModel(applicatio
             }
 
             launch {
-                repository.observeSpecialistAppointments().collect { appointments ->
-                    _uiState.update { it.copy(specialistAppointments = appointments) }
-                }
-            }
-
-            launch {
                 repository.observePatientAmbulanceRequests().collect { requests ->
                     _uiState.update { it.copy(patientAmbulanceRequests = requests) }
-                }
-            }
-
-            launch {
-                repository.observeAllAmbulanceRequests().collect { requests ->
-                    _uiState.update { it.copy(allAmbulanceRequests = requests) }
                 }
             }
 
@@ -114,20 +109,8 @@ class CarePulseViewModel(application: Application) : AndroidViewModel(applicatio
             }
 
             launch {
-                repository.observeAllDiagnosticBookings().collect { bookings ->
-                    _uiState.update { it.copy(allDiagnosticBookings = bookings) }
-                }
-            }
-
-            launch {
                 repository.observePatientInsuranceClaims().collect { claims ->
                     _uiState.update { it.copy(patientInsuranceClaims = claims) }
-                }
-            }
-
-            launch {
-                repository.observeAllInsuranceClaims().collect { claims ->
-                    _uiState.update { it.copy(allInsuranceClaims = claims) }
                 }
             }
 
@@ -141,11 +124,30 @@ class CarePulseViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
-    fun switchRole(role: UserRole) {
-        viewModelScope.launch {
-            _uiState.update { it.copy(currentRole = role, feedbackMessage = "Switched view to ${role.title}") }
-            repository.updateUserRole(role)
+    fun selectMainTab(tab: MainNavTab) {
+        _uiState.update { it.copy(selectedTab = tab) }
+    }
+
+    fun navigateToBooking(subTab: Int = 0, specialtyFilter: String = "All") {
+        _uiState.update {
+            it.copy(
+                selectedTab = MainNavTab.BOOKING,
+                bookingSubTab = subTab,
+                selectedSpecialtyFilter = specialtyFilter
+            )
         }
+    }
+
+    fun selectBookingSubTab(subTab: Int) {
+        _uiState.update { it.copy(bookingSubTab = subTab) }
+    }
+
+    fun selectSpecialtyFilter(specialty: String) {
+        _uiState.update { it.copy(selectedSpecialtyFilter = specialty) }
+    }
+
+    fun updateSearchQuery(query: String) {
+        _uiState.update { it.copy(searchQuery = query) }
     }
 
     fun scheduleAppointment(
@@ -169,20 +171,22 @@ class CarePulseViewModel(application: Application) : AndroidViewModel(applicatio
                     consultationFee = specialist.fee
                 )
                 repository.scheduleAppointment(appointment)
-                _uiState.update { it.copy(feedbackMessage = "Appointment confirmed with ${specialist.name} for $date ($timeSlot)") }
+                _uiState.update {
+                    it.copy(feedbackMessage = "Appointment confirmed with ${specialist.name} for $date ($timeSlot)")
+                }
             } catch (e: Exception) {
                 _uiState.update { it.copy(feedbackMessage = "Failed to book: ${e.message}") }
             }
         }
     }
 
-    fun updateAppointmentStatus(appointmentId: String, status: String, prescription: String = "") {
+    fun cancelAppointment(appointmentId: String) {
         viewModelScope.launch {
             try {
-                repository.updateAppointmentStatus(appointmentId, status, prescription)
-                _uiState.update { it.copy(feedbackMessage = "Appointment marked $status") }
+                repository.cancelAppointment(appointmentId)
+                _uiState.update { it.copy(feedbackMessage = "Appointment cancelled") }
             } catch (e: Exception) {
-                _uiState.update { it.copy(feedbackMessage = "Update failed: ${e.message}") }
+                _uiState.update { it.copy(feedbackMessage = "Could not cancel: ${e.message}") }
             }
         }
     }
@@ -196,11 +200,12 @@ class CarePulseViewModel(application: Application) : AndroidViewModel(applicatio
         viewModelScope.launch {
             try {
                 _uiState.update { it.copy(isLoading = true) }
-                val id = repository.requestAmbulance(pickupAddress, emergencyType, ambulanceType, patientPhone)
+                repository.requestAmbulance(pickupAddress, emergencyType, ambulanceType, patientPhone)
                 _uiState.update {
                     it.copy(
                         isLoading = false,
-                        feedbackMessage = "🚨 Emergency Ambulance dispatched! Paramedic Alpha en route."
+                        selectedTab = MainNavTab.EMERGENCY,
+                        feedbackMessage = "Emergency Ambulance dispatched! Paramedic Alpha en route."
                     )
                 }
             } catch (e: Exception) {
@@ -213,7 +218,7 @@ class CarePulseViewModel(application: Application) : AndroidViewModel(applicatio
         viewModelScope.launch {
             try {
                 repository.updateAmbulanceStatus(requestId, status, etaMinutes)
-                _uiState.update { it.copy(feedbackMessage = "Ambulance status updated to $status") }
+                _uiState.update { it.copy(feedbackMessage = "Emergency request marked $status") }
             } catch (e: Exception) {
                 _uiState.update { it.copy(feedbackMessage = "Error updating ambulance: ${e.message}") }
             }
@@ -232,17 +237,6 @@ class CarePulseViewModel(application: Application) : AndroidViewModel(applicatio
                 _uiState.update { it.copy(feedbackMessage = "Booked ${test.name} at ${center.name}") }
             } catch (e: Exception) {
                 _uiState.update { it.copy(feedbackMessage = "Failed booking: ${e.message}") }
-            }
-        }
-    }
-
-    fun updateDiagnosticStatus(bookingId: String, status: String, summary: String, abnormal: Boolean = false) {
-        viewModelScope.launch {
-            try {
-                repository.updateDiagnosticStatus(bookingId, status, summary, abnormal)
-                _uiState.update { it.copy(feedbackMessage = "Lab test marked $status") }
-            } catch (e: Exception) {
-                _uiState.update { it.copy(feedbackMessage = "Error: ${e.message}") }
             }
         }
     }
@@ -271,17 +265,6 @@ class CarePulseViewModel(application: Application) : AndroidViewModel(applicatio
                 _uiState.update { it.copy(feedbackMessage = "Claim of $$amount submitted for pre-authorization") }
             } catch (e: Exception) {
                 _uiState.update { it.copy(feedbackMessage = "Claim submission error: ${e.message}") }
-            }
-        }
-    }
-
-    fun reviewInsuranceClaim(claimId: String, status: String, approvedAmount: Double, notes: String) {
-        viewModelScope.launch {
-            try {
-                repository.reviewInsuranceClaim(claimId, status, approvedAmount, notes)
-                _uiState.update { it.copy(feedbackMessage = "Claim $status ($$approvedAmount approved)") }
-            } catch (e: Exception) {
-                _uiState.update { it.copy(feedbackMessage = "Review failed: ${e.message}") }
             }
         }
     }
@@ -347,10 +330,6 @@ class CarePulseViewModel(application: Application) : AndroidViewModel(applicatio
                 _uiState.update { it.copy(feedbackMessage = "Could not send message: ${e.message}") }
             }
         }
-    }
-
-    fun selectProcedureGuide(guide: ProcedureGuide) {
-        _uiState.update { it.copy(activeProcedureGuide = guide) }
     }
 
     fun toggleProcedureStep(stepId: String) {

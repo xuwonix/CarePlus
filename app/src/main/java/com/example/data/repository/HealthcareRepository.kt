@@ -11,6 +11,8 @@ import com.example.data.model.DiagnosticCenter
 import com.example.data.model.DiagnosticTest
 import com.example.data.model.InsuranceClaim
 import com.example.data.model.MedicalRecord
+import com.example.data.model.MedicalSpecialtyItem
+import com.example.data.model.NearbyFacility
 import com.example.data.model.ProcedureChecklistStep
 import com.example.data.model.ProcedureGuide
 import com.example.data.model.Specialist
@@ -47,9 +49,9 @@ class HealthcareRepository(private val db: FirebaseFirestore) {
     fun getCurrentUser() = auth.currentUser
 
     // -------------------------------------------------------------
-    // USER PROFILE & ROLES
+    // PATIENT PROFILE
     // -------------------------------------------------------------
-    suspend fun getOrCreateUserProfile(userRole: UserRole = UserRole.PATIENT): UserProfile {
+    suspend fun getOrCreateUserProfile(): UserProfile {
         val uid = requireUserId()
         val docRef = db.collection("users").document(uid)
         val snapshot = docRef.get().await()
@@ -57,15 +59,15 @@ class HealthcareRepository(private val db: FirebaseFirestore) {
             return snapshot.toObject(UserProfile::class.java) ?: UserProfile(
                 userId = uid,
                 email = auth.currentUser?.email ?: "",
-                displayName = auth.currentUser?.displayName ?: "CarePulse User",
-                role = userRole.name
+                displayName = auth.currentUser?.displayName ?: "CarePulse Patient",
+                role = UserRole.PATIENT.name
             )
         } else {
             val profile = UserProfile(
                 userId = uid,
                 email = auth.currentUser?.email ?: "",
-                displayName = auth.currentUser?.displayName ?: "CarePulse User",
-                role = userRole.name,
+                displayName = auth.currentUser?.displayName ?: "CarePulse Patient",
+                role = UserRole.PATIENT.name,
                 phone = "+1 (555) 392-1084"
             )
             docRef.set(
@@ -73,26 +75,16 @@ class HealthcareRepository(private val db: FirebaseFirestore) {
                     "userId" to profile.userId,
                     "email" to profile.email,
                     "displayName" to profile.displayName,
-                    "role" to profile.role,
+                    "role" to UserRole.PATIENT.name,
                     "phone" to profile.phone,
-                    "organization" to profile.organization,
-                    "licenseNumber" to profile.licenseNumber,
+                    "organization" to "",
+                    "licenseNumber" to "",
                     "createdAt" to FieldValue.serverTimestamp(),
                     "updatedAt" to FieldValue.serverTimestamp()
                 )
             ).await()
             return profile
         }
-    }
-
-    suspend fun updateUserRole(newRole: UserRole) {
-        val uid = requireUserId()
-        db.collection("users").document(uid).update(
-            mapOf(
-                "role" to newRole.name,
-                "updatedAt" to FieldValue.serverTimestamp()
-            )
-        ).await()
     }
 
     fun observeUserProfile(): Flow<UserProfile?> = flow {
@@ -124,20 +116,6 @@ class HealthcareRepository(private val db: FirebaseFirestore) {
             .collect { emit(it) }
     }
 
-    fun observeSpecialistAppointments(): Flow<List<Appointment>> = flow {
-        val uid = requireUserId()
-        db.collection("appointments")
-            .whereEqualTo("specialistId", uid)
-            .snapshots()
-            .map { it.toObjects(Appointment::class.java) }
-            .catch { error ->
-                if (error is CancellationException) throw error
-                Log.w("HealthcareRepo", "Error observing specialist appointments: ${error.message}")
-                emit(emptyList())
-            }
-            .collect { emit(it) }
-    }
-
     suspend fun scheduleAppointment(appointment: Appointment) {
         val uid = requireUserId()
         val docRef = db.collection("appointments").document()
@@ -161,16 +139,13 @@ class HealthcareRepository(private val db: FirebaseFirestore) {
         docRef.set(payload).await()
     }
 
-    suspend fun updateAppointmentStatus(appointmentId: String, newStatus: String, prescription: String = "") {
-        val docRef = db.collection("appointments").document(appointmentId)
-        val updates = mutableMapOf<String, Any>(
-            "status" to newStatus,
-            "updatedAt" to FieldValue.serverTimestamp()
-        )
-        if (prescription.isNotBlank()) {
-            updates["prescription"] = prescription
-        }
-        docRef.update(updates).await()
+    suspend fun cancelAppointment(appointmentId: String) {
+        db.collection("appointments").document(appointmentId).update(
+            mapOf(
+                "status" to "CANCELLED",
+                "updatedAt" to FieldValue.serverTimestamp()
+            )
+        ).await()
     }
 
     // -------------------------------------------------------------
@@ -185,19 +160,6 @@ class HealthcareRepository(private val db: FirebaseFirestore) {
             .catch { error ->
                 if (error is CancellationException) throw error
                 Log.w("HealthcareRepo", "Error observing ambulance requests: ${error.message}")
-                emit(emptyList())
-            }
-            .collect { emit(it) }
-    }
-
-    fun observeAllAmbulanceRequests(): Flow<List<AmbulanceRequest>> = flow {
-        db.collection("ambulance_requests")
-            .orderBy("createdAt", Query.Direction.DESCENDING)
-            .snapshots()
-            .map { it.toObjects(AmbulanceRequest::class.java) }
-            .catch { error ->
-                if (error is CancellationException) throw error
-                Log.w("HealthcareRepo", "Error observing all ambulance requests: ${error.message}")
                 emit(emptyList())
             }
             .collect { emit(it) }
@@ -259,19 +221,6 @@ class HealthcareRepository(private val db: FirebaseFirestore) {
             .collect { emit(it) }
     }
 
-    fun observeAllDiagnosticBookings(): Flow<List<DiagnosticBooking>> = flow {
-        db.collection("diagnostic_bookings")
-            .orderBy("createdAt", Query.Direction.DESCENDING)
-            .snapshots()
-            .map { it.toObjects(DiagnosticBooking::class.java) }
-            .catch { error ->
-                if (error is CancellationException) throw error
-                Log.w("HealthcareRepo", "Error observing all diagnostic bookings: ${error.message}")
-                emit(emptyList())
-            }
-            .collect { emit(it) }
-    }
-
     suspend fun bookDiagnosticTest(
         center: DiagnosticCenter,
         test: DiagnosticTest,
@@ -301,17 +250,6 @@ class HealthcareRepository(private val db: FirebaseFirestore) {
         docRef.set(payload).await()
     }
 
-    suspend fun updateDiagnosticStatus(bookingId: String, status: String, resultSummary: String, abnormal: Boolean = false) {
-        db.collection("diagnostic_bookings").document(bookingId).update(
-            mapOf(
-                "status" to status,
-                "resultSummary" to resultSummary,
-                "abnormalFlag" to abnormal,
-                "updatedAt" to FieldValue.serverTimestamp()
-            )
-        ).await()
-    }
-
     // -------------------------------------------------------------
     // INSURANCE CLAIMS
     // -------------------------------------------------------------
@@ -324,19 +262,6 @@ class HealthcareRepository(private val db: FirebaseFirestore) {
             .catch { error ->
                 if (error is CancellationException) throw error
                 Log.w("HealthcareRepo", "Error observing insurance claims: ${error.message}")
-                emit(emptyList())
-            }
-            .collect { emit(it) }
-    }
-
-    fun observeAllInsuranceClaims(): Flow<List<InsuranceClaim>> = flow {
-        db.collection("insurance_claims")
-            .orderBy("createdAt", Query.Direction.DESCENDING)
-            .snapshots()
-            .map { it.toObjects(InsuranceClaim::class.java) }
-            .catch { error ->
-                if (error is CancellationException) throw error
-                Log.w("HealthcareRepo", "Error observing all claims: ${error.message}")
                 emit(emptyList())
             }
             .collect { emit(it) }
@@ -362,17 +287,6 @@ class HealthcareRepository(private val db: FirebaseFirestore) {
             "updatedAt" to FieldValue.serverTimestamp()
         )
         docRef.set(payload).await()
-    }
-
-    suspend fun reviewInsuranceClaim(claimId: String, status: String, approvedAmount: Double, notes: String) {
-        db.collection("insurance_claims").document(claimId).update(
-            mapOf(
-                "status" to status,
-                "approvedAmount" to approvedAmount,
-                "reviewerNotes" to notes,
-                "updatedAt" to FieldValue.serverTimestamp()
-            )
-        ).await()
     }
 
     // -------------------------------------------------------------
@@ -439,7 +353,7 @@ class HealthcareRepository(private val db: FirebaseFirestore) {
         val payload = mapOf(
             "consultationId" to consultationId,
             "senderId" to uid,
-            "senderName" to (auth.currentUser?.displayName ?: "User"),
+            "senderName" to (auth.currentUser?.displayName ?: "Patient"),
             "senderRole" to "PATIENT",
             "recipientId" to recipientId,
             "recipientName" to recipientName,
@@ -452,8 +366,76 @@ class HealthcareRepository(private val db: FirebaseFirestore) {
     }
 
     // -------------------------------------------------------------
-    // CURATED DATA: SPECIALISTS, DIAGNOSTIC LABS, PROCEDURE GUIDES
+    // CURATED PATIENT CATALOG: SPECIALISTS, HOSPITALS, LABS, GUIDES
     // -------------------------------------------------------------
+    fun getPopularSpecialties(): List<MedicalSpecialtyItem> = listOf(
+        MedicalSpecialtyItem("spec_cardio", "Cardiology", "Heart & Vascular", 14),
+        MedicalSpecialtyItem("spec_neuro", "Neurology", "Brain & Spine", 9),
+        MedicalSpecialtyItem("spec_ortho", "Orthopedics", "Bone & Joint", 11),
+        MedicalSpecialtyItem("spec_pedia", "Pediatrics", "Child Health", 16),
+        MedicalSpecialtyItem("spec_derm", "Dermatology", "Skin & Hair", 8),
+        MedicalSpecialtyItem("spec_gen", "General Medicine", "Primary Care", 22)
+    )
+
+    fun getNearbyHospitalsAndCenters(): List<NearbyFacility> = listOf(
+        NearbyFacility(
+            id = "hosp_metro_trauma",
+            name = "Metro General Trauma & Cardiac Center",
+            facilityType = "HOSPITAL",
+            address = "742 Medical Plaza Drive",
+            distanceKm = 1.2,
+            rating = 4.9,
+            reviewCount = 840,
+            isOpen24x7 = true,
+            hasEmergencyUnit = true,
+            providesHomeCollection = false,
+            departments = listOf("24/7 ER & Trauma", "Cardiology", "Neurology", "ICU"),
+            waitTimeMinutes = 12
+        ),
+        NearbyFacility(
+            id = "center_1",
+            name = "Metro Health Advanced Imaging & Diagnostics",
+            facilityType = "DIAGNOSTIC_CENTER",
+            address = "450 Health Sciences Drive",
+            distanceKm = 1.8,
+            rating = 4.9,
+            reviewCount = 412,
+            isOpen24x7 = false,
+            hasEmergencyUnit = false,
+            providesHomeCollection = true,
+            departments = listOf("3T MRI", "CT Scan", "Lipid & Blood Panels", "ECG"),
+            waitTimeMinutes = 10
+        ),
+        NearbyFacility(
+            id = "hosp_activelife",
+            name = "ActiveLife Sports & Orthopedic Hospital",
+            facilityType = "HOSPITAL",
+            address = "310 Valley Boulevard",
+            distanceKm = 2.6,
+            rating = 4.8,
+            reviewCount = 520,
+            isOpen24x7 = true,
+            hasEmergencyUnit = true,
+            providesHomeCollection = false,
+            departments = listOf("Orthopedics", "Physiotherapy", "Sports Surgery", "X-Ray"),
+            waitTimeMinutes = 15
+        ),
+        NearbyFacility(
+            id = "center_2",
+            name = "BioPath Premier Clinical Laboratories",
+            facilityType = "DIAGNOSTIC_CENTER",
+            address = "780 Commerce Court, Suite 102",
+            distanceKm = 3.2,
+            rating = 4.8,
+            reviewCount = 630,
+            isOpen24x7 = false,
+            hasEmergencyUnit = false,
+            providesHomeCollection = true,
+            departments = listOf("Home Phlebotomy", "HbA1c & Diabetes", "Ultrasound", "Pathology"),
+            waitTimeMinutes = 5
+        )
+    )
+
     fun getLocalSpecialists(): List<Specialist> = listOf(
         Specialist(
             id = "doc_cardio_1",
@@ -463,7 +445,7 @@ class HealthcareRepository(private val db: FirebaseFirestore) {
             experienceYears = 16,
             rating = 4.9,
             reviewCount = 312,
-            clinicHospital = "Heart & Vascular Institute of Metro",
+            clinicHospital = "Metro General Trauma & Cardiac Center",
             address = "742 Medical Plaza, Suite 400",
             fee = 140.0,
             nextAvailableSlot = "Tomorrow at 10:30 AM",
@@ -491,7 +473,7 @@ class HealthcareRepository(private val db: FirebaseFirestore) {
             experienceYears = 12,
             rating = 4.9,
             reviewCount = 189,
-            clinicHospital = "ActiveLife Sports Medicine & Ortho Hospital",
+            clinicHospital = "ActiveLife Sports & Orthopedic Hospital",
             address = "310 Valley Boulevard",
             fee = 130.0,
             nextAvailableSlot = "Friday at 09:00 AM",
@@ -510,6 +492,20 @@ class HealthcareRepository(private val db: FirebaseFirestore) {
             fee = 95.0,
             nextAvailableSlot = "Today at 04:30 PM",
             bio = "Warm, attentive care specializing in pediatric developmental milestones, vaccinations, and childhood respiratory allergies."
+        ),
+        Specialist(
+            id = "doc_derm_6",
+            name = "Dr. Priya Nair, MD",
+            title = "Clinical & Cosmetic Dermatologist",
+            specialty = "Dermatology",
+            experienceYears = 11,
+            rating = 4.9,
+            reviewCount = 278,
+            clinicHospital = "Metro Skin & Wellness Clinic",
+            address = "215 Oakridge Avenue, Suite 2B",
+            fee = 115.0,
+            nextAvailableSlot = "Tomorrow at 02:00 PM",
+            bio = "Focused on eczema, acne therapy, mole mapping, and minimally invasive dermatologic procedures."
         ),
         Specialist(
             id = "doc_gen_5",
