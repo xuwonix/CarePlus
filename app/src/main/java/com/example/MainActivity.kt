@@ -102,6 +102,7 @@ import com.example.ui.screens.patient.NotificationsScreen
 import com.example.ui.screens.patient.PatientBookingTab
 import com.example.ui.screens.patient.PatientEmergencyTab
 import com.example.ui.screens.patient.PatientHomeTab
+import com.example.ui.screens.patient.PatientOnboardingScreen
 import com.example.ui.screens.patient.PatientProfileTab
 import com.example.ui.screens.patient.PatientRecordsTab
 import com.example.ui.screens.patient.RescheduleBookingModal
@@ -208,6 +209,24 @@ fun PatientMainApp(
     }
 
     when {
+        uiState.userProfile == null && uiState.isLoading -> {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+            }
+        }
+
+        uiState.userProfile != null && !uiState.userProfile!!.onboardingCompleted -> {
+            PatientOnboardingScreen(
+                initialProfile = uiState.userProfile!!,
+                onSaveProfile = { updatedProfile ->
+                    viewModel.updatePatientProfile(updatedProfile)
+                },
+                onSkip = {
+                    viewModel.skipOnboarding()
+                }
+            )
+        }
+
         activeProcedureScreen != null -> {
             ProcedureDetailScreen(
                 guide = activeProcedureScreen!!,
@@ -313,7 +332,7 @@ fun PatientMainApp(
                                             .testTag("top_bar_location_button")
                                     ) {
                                         Text(
-                                            text = "CarePulse",
+                                            text = "Nidanmita",
                                             style = MaterialTheme.typography.titleLarge,
                                             fontWeight = FontWeight.ExtraBold,
                                             color = MaterialTheme.colorScheme.primary
@@ -499,7 +518,7 @@ fun PatientMainApp(
                                         onOpenSupportChat = {
                                             viewModel.openConsultationChat(
                                                 "consult_doc_cardio_1",
-                                                "Dr. Elena Rostova, MD",
+                                                "Dr. Ananya Baruah, MD, DM",
                                                 "doc_cardio_1"
                                             )
                                             activeChatScreen = true
@@ -536,8 +555,8 @@ fun PatientMainApp(
     // Patient Modals
     if (showAmbulanceModal) {
         AmbulanceDispatchModal(
-            defaultAddress = uiState.userProfile?.savedAddress ?: "420 Maple Avenue, Apt 3B",
-            defaultPhone = uiState.userProfile?.phone ?: "+1 (555) 911-3829",
+            defaultAddress = uiState.userProfile?.savedAddress ?: "",
+            defaultPhone = uiState.userProfile?.phone ?: "",
             onDismiss = { showAmbulanceModal = false },
             onConfirm = { pickup, emergencyType, ambulanceType, phone ->
                 viewModel.requestAmbulance(pickup, emergencyType, ambulanceType, phone)
@@ -622,8 +641,19 @@ fun PatientMainApp(
         AddMedicalRecordModal(
             familyMembers = uiState.familyMembers,
             onDismiss = { showAddRecordModal = false },
-            onConfirm = { title, cat, doc, date, summary, metrics, memberName ->
-                viewModel.addMedicalRecord(title, cat, doc, date, summary, metrics, memberName)
+            onConfirm = { title, cat, doc, date, summary, metrics, memberName, fileType, attachmentPath, attachmentName ->
+                viewModel.addMedicalRecord(
+                    title = title,
+                    category = cat,
+                    doctorOrFacility = doc,
+                    recordDate = date,
+                    summary = summary,
+                    keyMetrics = metrics,
+                    memberName = memberName,
+                    fileType = fileType,
+                    attachmentPath = attachmentPath,
+                    attachmentName = attachmentName
+                )
                 showAddRecordModal = false
             }
         )

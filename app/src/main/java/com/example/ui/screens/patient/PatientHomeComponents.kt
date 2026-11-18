@@ -52,6 +52,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.data.model.Appointment
+import com.example.data.model.DiagnosticBooking
 import com.example.data.model.DiagnosticCenter
 import com.example.data.model.DiagnosticTest
 import com.example.data.model.HealthServiceCategory
@@ -213,6 +214,88 @@ fun UpcomingAppointmentCard(
                     overflow = TextOverflow.Ellipsis
                 )
             }
+        }
+    }
+}
+
+@Composable
+fun UpcomingLabTestCard(
+    booking: DiagnosticBooking,
+    onCardClick: () -> Unit
+) {
+    val isHomePickup = booking.collectionType == "HOME_COLLECTION"
+    Card(
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer),
+        modifier = Modifier
+            .width(290.dp)
+            .clickable { onCardClick() }
+            .testTag("upcoming_lab_card_${booking.id}")
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.75f)
+                ) {
+                    Text(
+                        text = "${booking.scheduledDate} • ${booking.scheduledTime.substringBefore(" -")}",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                    )
+                }
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = MaterialTheme.colorScheme.secondary
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Biotech,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSecondary,
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = if (isHomePickup) "Home Pickup" else "Lab Test",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSecondary
+                        )
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(10.dp))
+            Text(
+                text = booking.testName,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSecondaryContainer,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                text = "${booking.status.replace("_", " ")} • For: ${booking.familyMemberName}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.85f)
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = booking.centerName,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.75f),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
         }
     }
 }
@@ -554,7 +637,7 @@ fun SearchDoctorResultCard(
             Column(modifier = Modifier.weight(1f)) {
                 Text(specialist.name, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
                 Text("${specialist.specialty} • ${specialist.clinicHospital}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Text("Next: ${specialist.nextAvailableSlot} • $${specialist.fee.toInt()}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                Text("Next: ${specialist.nextAvailableSlot} • ₹${specialist.fee.toInt()}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
             }
             Row {
                 IconButton(onClick = onChat) {
@@ -592,7 +675,7 @@ fun SearchTestResultCard(
             Column(modifier = Modifier.weight(1f)) {
                 Text(test.name, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
                 Text("${center.name} • ${test.turnaroundTime}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Text("$${test.price.toInt()}", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                Text("₹${test.price.toInt()}", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
             }
             Button(onClick = onBook) {
                 Text("Book Test")

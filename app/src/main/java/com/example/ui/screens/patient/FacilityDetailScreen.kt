@@ -276,7 +276,7 @@ fun FacilityDetailScreen(
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(doc.name, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
                                 Text("${doc.specialty} • Next: ${doc.nextAvailableSlot}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                Text("$${doc.fee.toInt()} / visit", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
+                                Text("₹${doc.fee.toInt()} / visit", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
                             }
                             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                 OutlinedButton(onClick = { onOpenDoctorProfile(doc) }) {
@@ -317,7 +317,7 @@ fun FacilityDetailScreen(
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(test.name, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
                                 Text("${test.sampleType} • Report in ${test.turnaroundTime}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                Text("$${test.price.toInt()}", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                                Text("₹${test.price.toInt()}", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
                             }
                             Button(onClick = { onBookTest(diagnosticCenter, test) }) {
                                 Text("Book")

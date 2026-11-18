@@ -70,6 +70,10 @@ fun PatientHomeTab(
 ) {
     val activeAmbulance = state.patientAmbulanceRequests.firstOrNull { it.status != "COMPLETED" }
     val upcomingAppointments = state.patientAppointments.filter { it.status == "SCHEDULED" }
+    val upcomingLabBookings = state.patientDiagnosticBookings.filter {
+        it.status == "BOOKED" || it.status == "SAMPLE_COLLECTED"
+    }
+    val hasUpcoming = upcomingAppointments.isNotEmpty() || upcomingLabBookings.isNotEmpty()
     val query = state.searchQuery.trim()
 
     LazyColumn(
@@ -138,7 +142,7 @@ fun PatientHomeTab(
                             )
                             Spacer(modifier = Modifier.width(4.dp))
                             Text(
-                                text = state.selectedLocationArea.substringBefore(" "),
+                                text = state.selectedLocationArea.substringBefore(","),
                                 style = MaterialTheme.typography.labelMedium,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.primary
@@ -261,7 +265,7 @@ fun PatientHomeTab(
                             Spacer(modifier = Modifier.height(8.dp))
                             Text("No matches found for \"$query\"", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
                             Text(
-                                text = "Try Cardiology, MRI, Nursing, Metro General, or Endoscopy.",
+                                text = "Try Cardiology, MRI, Nursing, TMCH, Baptist, or Endoscopy.",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -332,16 +336,16 @@ fun PatientHomeTab(
                 }
             }
         } else {
-            // Upcoming Appointments
+            // Upcoming Appointments (Doctors & Lab Tests)
             item {
                 Column(modifier = Modifier.fillMaxWidth()) {
                     SectionHeaderRow(
                         title = "Upcoming Appointments",
-                        actionLabel = if (upcomingAppointments.isNotEmpty()) "View All" else "Book Now",
-                        onAction = { onNavigateToBooking(if (upcomingAppointments.isNotEmpty()) 3 else 0, "All") }
+                        actionLabel = if (hasUpcoming) "View All" else "Book Now",
+                        onAction = { onNavigateToBooking(if (hasUpcoming) 3 else 0, "All") }
                     )
                     Spacer(modifier = Modifier.height(8.dp))
-                    if (upcomingAppointments.isEmpty()) {
+                    if (!hasUpcoming) {
                         Card(
                             shape = RoundedCornerShape(16.dp),
                             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
@@ -371,7 +375,7 @@ fun PatientHomeTab(
                                 Column(modifier = Modifier.weight(1f)) {
                                     Text("No upcoming visits scheduled", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
                                     Text(
-                                        text = "Book an in-clinic or video visit with a local specialist",
+                                        text = "Book a specialist consultation or diagnostic lab test in Tezpur",
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
@@ -384,10 +388,16 @@ fun PatientHomeTab(
                             contentPadding = PaddingValues(horizontal = 16.dp),
                             horizontalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
-                            items(upcomingAppointments) { appt ->
+                            items(upcomingAppointments, key = { "appt_${it.id}" }) { appt ->
                                 UpcomingAppointmentCard(
                                     appointment = appt,
                                     onChatClick = { onOpenChatWithDoctor(appt.specialistName, appt.specialistId) },
+                                    onCardClick = { onNavigateToBooking(3, "All") }
+                                )
+                            }
+                            items(upcomingLabBookings, key = { "lab_${it.id}" }) { lab ->
+                                UpcomingLabTestCard(
+                                    booking = lab,
                                     onCardClick = { onNavigateToBooking(3, "All") }
                                 )
                             }

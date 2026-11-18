@@ -22,6 +22,6 @@ dependencyResolutionManagement {
   }
 }
 
-rootProject.name = "CarePulse"
+rootProject.name = "Nidanmita"
 
 include(":app")

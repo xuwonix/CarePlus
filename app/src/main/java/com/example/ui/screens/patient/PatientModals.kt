@@ -1,11 +1,14 @@
 package com.example.ui.screens.patient
 
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -17,6 +20,8 @@ import androidx.compose.material.icons.filled.Emergency
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -42,22 +47,35 @@ import com.example.data.model.Specialist
 
 @Composable
 fun AmbulanceDispatchModal(
-    defaultAddress: String = "420 Maple Avenue, Apt 3B",
-    defaultPhone: String = "+1 (555) 911-3829",
+    defaultAddress: String = "",
+    defaultPhone: String = "",
     onDismiss: () -> Unit,
     onConfirm: (pickup: String, emergencyType: String, ambulanceType: String, phone: String) -> Unit
 ) {
-    var pickupAddress by remember { mutableStateOf(defaultAddress.ifBlank { "420 Maple Avenue, Apt 3B" }) }
-    var patientPhone by remember { mutableStateOf(defaultPhone.ifBlank { "+1 (555) 911-3829" }) }
+    var pickupAddress by remember { mutableStateOf(defaultAddress) }
+    var patientPhone by remember { mutableStateOf(defaultPhone) }
     var selectedEmergencyType by remember { mutableStateOf("CARDIAC_OR_RESPIRATORY") }
     var selectedVehicleType by remember { mutableStateOf("ADVANCED_CARDIAC") }
 
     val emergencyTypes = listOf(
-        "CARDIAC_OR_RESPIRATORY" to "Cardiac / Chest Pain / Shortness of Breath",
-        "TRAUMA" to "Trauma / Accident / Fracture",
+        "CARDIAC_OR_RESPIRATORY" to "Chest Pain / Heart / Breathing Trouble",
+        "TRAUMA" to "Accident / Injury / Bone Fracture",
         "STROKE" to "Stroke / Sudden Weakness / Slurred Speech",
-        "MATERNITY" to "Labor & Maternity Emergency",
-        "GENERAL" to "General Acute Emergency"
+        "MATERNITY" to "Pregnancy & Maternity Emergency",
+        "GENERAL" to "High Fever / General Medical Emergency"
+    )
+
+    val vehicleOptions = listOf(
+        Triple(
+            "ADVANCED_CARDIAC",
+            "ICU / Cardiac Ambulance (ACLS)",
+            "Mobile ICU with ventilator, heart monitor, defibrillator & paramedic — best for chest pain, heart attack, stroke, or unconscious patients."
+        ),
+        Triple(
+            "BASIC_LIFE_SUPPORT",
+            "Basic Medical Ambulance (BLS)",
+            "Standard ambulance with oxygen cylinder, stretcher, first-aid & EMT — best for fractures, high fever, maternity, or safe hospital transfer."
+        )
     )
 
     AlertDialog(
@@ -86,7 +104,7 @@ fun AmbulanceDispatchModal(
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 Text(
-                    text = "Paramedics dispatch immediately upon confirmation with hospital triage notification.",
+                    text = "Tezpur 108 & partner hospital ambulances dispatch immediately with ER pre-alert.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -94,7 +112,8 @@ fun AmbulanceDispatchModal(
                 OutlinedTextField(
                     value = pickupAddress,
                     onValueChange = { pickupAddress = it },
-                    label = { Text("Exact Pickup Location / Address") },
+                    label = { Text("Exact Pickup Location / Landmark") },
+                    placeholder = { Text("e.g. Near Mission Chariali, Tezpur") },
                     modifier = Modifier
                         .fillMaxWidth()
                         .testTag("ambulance_pickup_input"),
@@ -105,6 +124,7 @@ fun AmbulanceDispatchModal(
                     value = patientPhone,
                     onValueChange = { patientPhone = it },
                     label = { Text("Contact Phone for Paramedic") },
+                    placeholder = { Text("+91 98640 ...") },
                     modifier = Modifier
                         .fillMaxWidth()
                         .testTag("ambulance_phone_input"),
@@ -120,37 +140,73 @@ fun AmbulanceDispatchModal(
                 emergencyTypes.forEach { (key, label) ->
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { selectedEmergencyType = key }
                     ) {
                         RadioButton(
                             selected = selectedEmergencyType == key,
                             onClick = { selectedEmergencyType = key }
                         )
-                        Spacer(modifier = Modifier.width(6.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
                         Text(text = label, style = MaterialTheme.typography.bodySmall)
                     }
                 }
 
+                Spacer(modifier = Modifier.height(2.dp))
                 Text(
-                    text = "Ambulance Vehicle Type:",
+                    text = "Select Ambulance Type:",
                     style = MaterialTheme.typography.labelMedium,
                     fontWeight = FontWeight.Bold
                 )
 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    FilterChip(
-                        selected = selectedVehicleType == "ADVANCED_CARDIAC",
-                        onClick = { selectedVehicleType = "ADVANCED_CARDIAC" },
-                        label = { Text("ACLS Unit") }
-                    )
-                    FilterChip(
-                        selected = selectedVehicleType == "BASIC_LIFE_SUPPORT",
-                        onClick = { selectedVehicleType = "BASIC_LIFE_SUPPORT" },
-                        label = { Text("BLS Unit") }
-                    )
+                vehicleOptions.forEach { (key, title, description) ->
+                    val isSelected = selectedVehicleType == key
+                    Card(
+                        shape = RoundedCornerShape(12.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = if (isSelected) {
+                                MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.55f)
+                            } else {
+                                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
+                            }
+                        ),
+                        border = BorderStroke(
+                            width = if (isSelected) 1.5.dp else 1.dp,
+                            color = if (isSelected) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.outlineVariant
+                        ),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { selectedVehicleType = key }
+                            .testTag("ambulance_type_${key.lowercase()}")
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(10.dp),
+                            verticalAlignment = Alignment.Top
+                        ) {
+                            RadioButton(
+                                selected = isSelected,
+                                onClick = { selectedVehicleType = key }
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = title,
+                                    style = MaterialTheme.typography.labelLarge,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (isSelected) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface
+                                )
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = description,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
                 }
             }
         },
@@ -198,10 +254,15 @@ fun BookSpecialistModal(
     var selectedSlot by remember { mutableStateOf(specialist.timeSlots.firstOrNull() ?: "10:30 AM") }
     var selectedMode by remember { mutableStateOf("IN_CLINIC") }
     var notesText by remember { mutableStateOf("") }
-    var selectedPayment by remember { mutableStateOf("Card •••• 4242") }
+    var selectedPayment by remember { mutableStateOf("UPI (GPay / PhonePe / Paytm)") }
 
     val modes = listOf("IN_CLINIC" to "In-Clinic", "VIDEO_CALL" to "Video Call", "CHAT" to "Chat")
-    val paymentMethods = listOf("Card •••• 4242", "UPI / Instant Pay", "Insurance Cashless", "Pay at Clinic")
+    val paymentMethods = listOf(
+        "UPI (GPay / PhonePe / Paytm)",
+        "Debit / Credit / RuPay Card",
+        "Insurance Cashless",
+        "Pay at Clinic"
+    )
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -213,7 +274,7 @@ fun BookSpecialistModal(
                     fontWeight = FontWeight.Bold
                 )
                 Text(
-                    text = "${specialist.name} • $${specialist.fee.toInt()}",
+                    text = "${specialist.name} • ₹${specialist.fee.toInt()}",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.primary
                 )
@@ -286,7 +347,7 @@ fun BookSpecialistModal(
                     shape = RoundedCornerShape(12.dp)
                 )
 
-                Text("Payment Checkout ($${specialist.fee.toInt()}):", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                Text("Payment Checkout (₹${specialist.fee.toInt()}):", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
                 paymentMethods.forEach { method ->
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         RadioButton(
@@ -335,13 +396,17 @@ fun BookDiagnosticModal(
     }
     val dateOptions = listOf("Tomorrow", "Fri Nov 20", "Sat Nov 21")
     val timeWindows = listOf("07:00 AM - 08:30 AM", "09:00 AM - 10:30 AM", "04:00 PM - 05:30 PM")
-    val paymentMethods = listOf("Card •••• 4242", "UPI / Instant Pay", "Pay on Doorstep / Lab")
+    val paymentMethods = listOf(
+        "UPI (GPay / PhonePe / Paytm)",
+        "Debit / Credit / RuPay Card",
+        "Pay on Doorstep / Lab"
+    )
 
     var selectedMember by remember { mutableStateOf("Self") }
     var selectedDate by remember { mutableStateOf(dateOptions.first()) }
     var selectedTime by remember { mutableStateOf(timeWindows.first()) }
     var collectionType by remember { mutableStateOf(if (center.providesHomeCollection) "HOME_COLLECTION" else "LAB_VISIT") }
-    var address by remember { mutableStateOf(defaultAddress.ifBlank { "420 Maple Avenue, Apt 3B" }) }
+    var address by remember { mutableStateOf(defaultAddress) }
     var selectedPayment by remember { mutableStateOf(paymentMethods.first()) }
 
     AlertDialog(
@@ -349,7 +414,7 @@ fun BookDiagnosticModal(
         title = {
             Column {
                 Text(text = "Book Diagnostic Test", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                Text(text = "${test.name} • $${test.price.toInt()}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+                Text(text = "${test.name} • ₹${test.price.toInt()}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
             }
         },
         text = {
@@ -436,7 +501,7 @@ fun BookDiagnosticModal(
                 },
                 modifier = Modifier.testTag("confirm_diagnostic_button")
             ) {
-                Text("Confirm ($${test.price.toInt()})")
+                Text("Confirm (₹${test.price.toInt()})")
             }
         },
         dismissButton = {
@@ -465,10 +530,14 @@ fun BookHomeCareModal(
     }
     val dateOptions = listOf("Today", "Tomorrow", "Fri Nov 20", "Sat Nov 21")
     val windows = listOf("09:00 AM - 11:00 AM", "12:00 PM - 02:00 PM", "04:00 PM - 06:00 PM")
-    val paymentMethods = listOf("Card •••• 4242", "UPI / Instant Pay", "Pay at Doorstep")
+    val paymentMethods = listOf(
+        "UPI (GPay / PhonePe / Paytm)",
+        "Debit / Credit / RuPay Card",
+        "Pay at Doorstep"
+    )
 
     var selectedMember by remember { mutableStateOf("Self") }
-    var visitAddress by remember { mutableStateOf(defaultAddress.ifBlank { "420 Maple Avenue, Apt 3B" }) }
+    var visitAddress by remember { mutableStateOf(defaultAddress) }
     var selectedDate by remember { mutableStateOf(dateOptions[1]) }
     var selectedWindow by remember { mutableStateOf(windows[0]) }
     var notes by remember { mutableStateOf("") }
@@ -479,7 +548,7 @@ fun BookHomeCareModal(
         title = {
             Column {
                 Text("Book Home Healthcare", fontWeight = FontWeight.Bold)
-                Text("${service.title} • $${service.price.toInt()}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+                Text("${service.title} • ₹${service.price.toInt()}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
             }
         },
         text = {
@@ -544,7 +613,7 @@ fun BookHomeCareModal(
                 },
                 modifier = Modifier.testTag("confirm_home_care_button")
             ) {
-                Text("Confirm Visit ($${service.price.toInt()})")
+                Text("Confirm Visit (₹${service.price.toInt()})")
             }
         },
         dismissButton = {

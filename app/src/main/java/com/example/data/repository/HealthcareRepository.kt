@@ -45,7 +45,7 @@ class HealthcareRepository(private val db: FirebaseFirestore) {
 
     fun requireUserId(): String {
         return auth.currentUser?.uid
-            ?: throw IllegalStateException("User must be signed in with Google before accessing CarePulse data.")
+            ?: throw IllegalStateException("User must be signed in with Google before accessing Nidanmita data.")
     }
 
     fun getCurrentUser() = auth.currentUser
@@ -61,16 +61,16 @@ class HealthcareRepository(private val db: FirebaseFirestore) {
             return snapshot.toObject(UserProfile::class.java) ?: UserProfile(
                 userId = uid,
                 email = auth.currentUser?.email ?: "",
-                displayName = auth.currentUser?.displayName ?: "CarePulse Patient",
+                displayName = auth.currentUser?.displayName ?: "Nidanmita Patient",
                 role = UserRole.PATIENT.name
             )
         } else {
             val profile = UserProfile(
                 userId = uid,
                 email = auth.currentUser?.email ?: "",
-                displayName = auth.currentUser?.displayName ?: "CarePulse Patient",
+                displayName = auth.currentUser?.displayName ?: "Nidanmita Patient",
                 role = UserRole.PATIENT.name,
-                phone = "+1 (555) 392-1084"
+                onboardingCompleted = false
             )
             docRef.set(
                 mapOf(
@@ -88,6 +88,7 @@ class HealthcareRepository(private val db: FirebaseFirestore) {
                     "emergencyContactPhone" to profile.emergencyContactPhone,
                     "locationArea" to profile.locationArea,
                     "savedAddress" to profile.savedAddress,
+                    "onboardingCompleted" to false,
                     "createdAt" to FieldValue.serverTimestamp(),
                     "updatedAt" to FieldValue.serverTimestamp()
                 )
@@ -123,6 +124,17 @@ class HealthcareRepository(private val db: FirebaseFirestore) {
                 "emergencyContactPhone" to profile.emergencyContactPhone,
                 "savedAddress" to profile.savedAddress,
                 "locationArea" to profile.locationArea,
+                "onboardingCompleted" to true,
+                "updatedAt" to FieldValue.serverTimestamp()
+            )
+        ).await()
+    }
+
+    suspend fun skipOnboarding() {
+        val uid = requireUserId()
+        db.collection("users").document(uid).update(
+            mapOf(
+                "onboardingCompleted" to true,
                 "updatedAt" to FieldValue.serverTimestamp()
             )
         ).await()
@@ -497,7 +509,7 @@ class HealthcareRepository(private val db: FirebaseFirestore) {
     ): String {
         val uid = requireUserId()
         val docRef = db.collection("ambulance_requests").document()
-        val vehicleNo = "EMS-${(1000..9999).random()}"
+        val vehicleNo = "AS-12-EM-${(1000..9999).random()}"
         docRef.set(
             mapOf(
                 "patientId" to uid,
@@ -508,18 +520,19 @@ class HealthcareRepository(private val db: FirebaseFirestore) {
                 "ambulanceType" to ambulanceType,
                 "status" to "DISPATCHED",
                 "vehicleNumber" to vehicleNo,
-                "driverName" to "Paramedic Team Alpha",
-                "driverPhone" to "+1 (555) 911-0428",
+                "driverName" to "Tezpur 108 EMS Team",
+                "driverPhone" to "+91 3712-108-420",
                 "etaMinutes" to 7L,
-                "hospitalDestination" to "Metro General Trauma & Cardiac Center",
+                "hospitalDestination" to "Tezpur Medical College & Hospital (TMCH)",
                 "createdAt" to FieldValue.serverTimestamp(),
                 "updatedAt" to FieldValue.serverTimestamp()
             )
         ).await()
 
+        val ambulanceLabel = if (ambulanceType == "ADVANCED_CARDIAC") "ICU / Cardiac (ACLS)" else "Basic Medical (BLS)"
         createNotification(
             title = "Emergency Ambulance Dispatched",
-            message = "Unit $vehicleNo ($ambulanceType) en route to $pickupAddress. ETA 7 mins.",
+            message = "Unit $vehicleNo ($ambulanceLabel) en route to $pickupAddress. ETA 7 mins.",
             category = "EMERGENCY"
         )
         return docRef.id
@@ -749,7 +762,7 @@ class HealthcareRepository(private val db: FirebaseFirestore) {
         ).await()
         createNotification(
             title = "Insurance Claim Submitted",
-            message = "Cashless claim for ${claim.procedureName} ($${claim.claimedAmount}) submitted.",
+            message = "Cashless claim for ${claim.procedureName} (₹${claim.claimedAmount.toInt()}) submitted.",
             category = "PAYMENT"
         )
     }
@@ -785,6 +798,8 @@ class HealthcareRepository(private val db: FirebaseFirestore) {
                 "summary" to record.summary,
                 "keyMetrics" to record.keyMetrics,
                 "fileType" to record.fileType,
+                "attachmentPath" to record.attachmentPath,
+                "attachmentName" to record.attachmentName,
                 "createdAt" to FieldValue.serverTimestamp(),
                 "updatedAt" to FieldValue.serverTimestamp()
             )

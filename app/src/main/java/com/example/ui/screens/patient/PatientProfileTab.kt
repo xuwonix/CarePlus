@@ -106,7 +106,7 @@ fun PatientProfileTab(
                         Spacer(modifier = Modifier.width(12.dp))
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = profile?.displayName?.ifBlank { "CarePulse Patient" } ?: "CarePulse Patient",
+                                text = profile?.displayName?.ifBlank { "Nidanmita Patient" } ?: "Nidanmita Patient",
                                 style = MaterialTheme.typography.titleLarge,
                                 fontWeight = FontWeight.Bold
                             )
@@ -119,7 +119,7 @@ fun PatientProfileTab(
                                 Icon(Icons.Default.Phone, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(14.dp))
                                 Spacer(modifier = Modifier.width(4.dp))
                                 Text(
-                                    text = profile?.phone?.ifBlank { "+1 (555) 392-1084" } ?: "+1 (555) 392-1084",
+                                    text = profile?.phone?.ifBlank { "Add phone number" } ?: "Add phone number",
                                     style = MaterialTheme.typography.labelMedium,
                                     color = MaterialTheme.colorScheme.primary
                                 )
@@ -135,10 +135,17 @@ fun PatientProfileTab(
 
                     Spacer(modifier = Modifier.height(12.dp))
 
-                    val blood = profile?.bloodGroup?.ifBlank { "O+" } ?: "O+"
-                    val age = profile?.age?.ifBlank { "32" } ?: "32"
+                    val blood = profile?.bloodGroup?.ifBlank { "Not set" } ?: "Not set"
+                    val age = profile?.age?.ifBlank { "Not set" } ?: "Not set"
                     val allergies = profile?.allergies?.ifBlank { "None reported" } ?: "None reported"
                     val conditions = profile?.chronicConditions?.ifBlank { "None" } ?: "None"
+                    val iceName = profile?.emergencyContactName.orEmpty()
+                    val icePhone = profile?.emergencyContactPhone.orEmpty()
+                    val iceLabel = if (iceName.isBlank() && icePhone.isBlank()) {
+                        "Not added yet (tap Edit to add emergency contact)"
+                    } else {
+                        listOf(iceName, icePhone).filter { it.isNotBlank() }.joinToString(" • ")
+                    }
 
                     Text(
                         text = "Blood Group: $blood • Age: $age • ${profile?.gender ?: "Patient"}",
@@ -151,7 +158,7 @@ fun PatientProfileTab(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Text(
-                        text = "ICE Contact: ${profile?.emergencyContactName ?: "Alex Morgan"} (${profile?.emergencyContactPhone ?: "+1 (555) 842-9910"})",
+                        text = "ICE Contact: $iceLabel",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.error
                     )
@@ -164,8 +171,10 @@ fun PatientProfileTab(
                     ) {
                         Icon(Icons.Default.LocationOn, contentDescription = null, modifier = Modifier.size(16.dp))
                         Spacer(modifier = Modifier.width(6.dp))
+                        val areaText = profile?.locationArea?.ifBlank { "Mission Chariali, Tezpur" } ?: "Mission Chariali, Tezpur"
+                        val addrText = profile?.savedAddress?.ifBlank { "Tap to set home address" } ?: "Tap to set home address"
                         Text(
-                            text = "${profile?.locationArea ?: "Downtown Metro"} • ${profile?.savedAddress?.take(32) ?: "Set address"}",
+                            text = "$areaText • ${addrText.take(34)}",
                             maxLines = 1
                         )
                     }
@@ -294,7 +303,7 @@ fun PatientProfileTab(
                             Text("${pay.paymentMethod} • Ref: ${pay.transactionRef}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.secondary)
                         }
                         Column(horizontalAlignment = Alignment.End) {
-                            Text("$${pay.amount.toInt()}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.ExtraBold, color = MaterialTheme.colorScheme.primary)
+                            Text("₹${pay.amount.toInt()}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.ExtraBold, color = MaterialTheme.colorScheme.primary)
                             SuggestionChip(onClick = {}, label = { Text(pay.status.replace("_", " ")) })
                         }
                     }
@@ -319,8 +328,8 @@ fun PatientProfileTab(
                         Icon(Icons.Default.VerifiedUser, contentDescription = null, tint = MaterialTheme.colorScheme.secondary)
                     }
                     Spacer(modifier = Modifier.height(6.dp))
-                    Text("BlueCross Shield Comprehensive Care", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold)
-                    Text("Policy #BCS-9923842 • Annual Limit: $500,000", style = MaterialTheme.typography.bodySmall)
+                    Text("Star Health Assure & PM-JAY", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold)
+                    Text("Policy #SH-AS-784210 • Annual Cover: ₹5,00,000", style = MaterialTheme.typography.bodySmall)
                     Spacer(modifier = Modifier.height(10.dp))
                     Button(
                         onClick = onSubmitClaim,
@@ -356,7 +365,7 @@ fun PatientProfileTab(
                             Text(claim.procedureName.ifBlank { "Hospital Claim" }, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
                             SuggestionChip(onClick = {}, label = { Text(claim.status) })
                         }
-                        Text("${claim.hospitalName} • Claimed: $${claim.claimedAmount}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("${claim.hospitalName} • Claimed: ₹${claim.claimedAmount.toInt()}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
             }

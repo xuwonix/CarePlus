@@ -16,7 +16,9 @@ data class MedicalRecord(
     val recordDate: String = "",
     val summary: String = "",
     val keyMetrics: String = "",
-    val fileType: String = "PDF",
+    val fileType: String = "IMAGE", // IMAGE, PDF, NOTE
+    val attachmentPath: String = "",
+    val attachmentName: String = "",
     @ServerTimestamp val createdAt: Timestamp? = null,
     @ServerTimestamp val updatedAt: Timestamp? = null
 )

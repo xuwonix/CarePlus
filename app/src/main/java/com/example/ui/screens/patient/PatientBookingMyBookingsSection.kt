@@ -115,7 +115,7 @@ fun HomeCareBookingSection(
                     ) {
                         SuggestionChip(onClick = {}, label = { Text(service.category.replace("_", " ")) })
                         Text(
-                            text = "$${service.price.toInt()}",
+                            text = "₹${service.price.toInt()}",
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.ExtraBold,
                             color = MaterialTheme.colorScheme.primary

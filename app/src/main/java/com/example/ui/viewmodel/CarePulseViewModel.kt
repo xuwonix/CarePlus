@@ -45,7 +45,7 @@ data class HealthcareUiState(
     val bookingSubTab: Int = 0, // 0 = Doctors, 1 = Lab Tests, 2 = Home Care, 3 = My Bookings
     val selectedSpecialtyFilter: String = "All",
     val searchQuery: String = "",
-    val selectedLocationArea: String = "Downtown Metro",
+    val selectedLocationArea: String = "Mission Chariali, Tezpur",
     val userProfile: UserProfile? = null,
     val familyMembers: List<FamilyMember> = emptyList(),
     val patientAppointments: List<Appointment> = emptyList(),
@@ -60,7 +60,7 @@ data class HealthcareUiState(
     val medicalRecords: List<MedicalRecord> = emptyList(),
     val currentChatMessages: List<ChatMessage> = emptyList(),
     val activeConsultationId: String = "consultation_default",
-    val activeRecipientName: String = "Dr. Elena Rostova, MD",
+    val activeRecipientName: String = "Dr. Ananya Baruah, MD, DM",
     val activeRecipientId: String = "doc_cardio_1",
     val specialists: List<Specialist> = emptyList(),
     val diagnosticCenters: List<DiagnosticCenter> = emptyList(),
@@ -85,7 +85,7 @@ class CarePulseViewModel(application: Application) : AndroidViewModel(applicatio
         HealthcareUiState(
             specialists = HealthcareCatalog.getLocalSpecialists(),
             diagnosticCenters = HealthcareCatalog.getLocalDiagnosticCenters(),
-            nearbyFacilities = HealthcareCatalog.getNearbyHospitalsAndCenters("Downtown Metro"),
+            nearbyFacilities = HealthcareCatalog.getNearbyHospitalsAndCenters("Mission Chariali, Tezpur"),
             popularSpecialties = HealthcareCatalog.getPopularSpecialties(),
             homeCareServices = HealthcareCatalog.getHomeCareServices(),
             procedureGuides = HealthcareCatalog.getProcedureGuides()
@@ -102,7 +102,7 @@ class CarePulseViewModel(application: Application) : AndroidViewModel(applicatio
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true) }
             val profile = repository.getOrCreateUserProfile()
-            val area = profile.locationArea.ifBlank { "Downtown Metro" }
+            val area = profile.locationArea.ifBlank { "Mission Chariali, Tezpur" }
             _uiState.update {
                 it.copy(
                     userProfile = profile,
@@ -115,7 +115,7 @@ class CarePulseViewModel(application: Application) : AndroidViewModel(applicatio
             launch {
                 repository.observeUserProfile().collect { updatedProfile ->
                     if (updatedProfile != null) {
-                        val updatedArea = updatedProfile.locationArea.ifBlank { "Downtown Metro" }
+                        val updatedArea = updatedProfile.locationArea.ifBlank { "Mission Chariali, Tezpur" }
                         _uiState.update {
                             it.copy(
                                 userProfile = updatedProfile,
@@ -234,6 +234,21 @@ class CarePulseViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
+    fun skipOnboarding() {
+        viewModelScope.launch {
+            try {
+                repository.skipOnboarding()
+            } catch (e: Exception) {
+                _uiState.update {
+                    it.copy(
+                        userProfile = it.userProfile?.copy(onboardingCompleted = true),
+                        feedbackMessage = "You can complete your health profile anytime in Profile."
+                    )
+                }
+            }
+        }
+    }
+
     fun updateLocation(area: String, address: String) {
         viewModelScope.launch {
             try {
@@ -343,7 +358,7 @@ class CarePulseViewModel(application: Application) : AndroidViewModel(applicatio
                     it.copy(
                         isLoading = false,
                         selectedTab = MainNavTab.EMERGENCY,
-                        feedbackMessage = "Emergency Ambulance dispatched! Paramedic Alpha en route."
+                        feedbackMessage = "Emergency Ambulance dispatched! Tezpur EMS en route."
                     )
                 }
             } catch (e: Exception) {
@@ -539,7 +554,7 @@ class CarePulseViewModel(application: Application) : AndroidViewModel(applicatio
                     documentReference = docRef
                 )
                 repository.submitInsuranceClaim(claim)
-                _uiState.update { it.copy(feedbackMessage = "Claim of $$amount submitted for pre-authorization") }
+                _uiState.update { it.copy(feedbackMessage = "Claim of ₹${amount.toInt()} submitted for pre-authorization") }
             } catch (e: Exception) {
                 _uiState.update { it.copy(feedbackMessage = "Claim submission error: ${e.message}") }
             }
@@ -553,7 +568,10 @@ class CarePulseViewModel(application: Application) : AndroidViewModel(applicatio
         recordDate: String,
         summary: String,
         keyMetrics: String,
-        memberName: String = "Self"
+        memberName: String = "Self",
+        fileType: String = "IMAGE",
+        attachmentPath: String = "",
+        attachmentName: String = ""
     ) {
         viewModelScope.launch {
             try {
@@ -564,10 +582,13 @@ class CarePulseViewModel(application: Application) : AndroidViewModel(applicatio
                     doctorOrFacility = doctorOrFacility,
                     recordDate = recordDate,
                     summary = summary,
-                    keyMetrics = keyMetrics
+                    keyMetrics = keyMetrics,
+                    fileType = fileType,
+                    attachmentPath = attachmentPath,
+                    attachmentName = attachmentName
                 )
                 repository.addMedicalRecord(record)
-                _uiState.update { it.copy(feedbackMessage = "Added '$title' ($memberName) to Health Locker") }
+                _uiState.update { it.copy(feedbackMessage = "Saved '$title' ($memberName) to Health Locker") }
             } catch (e: Exception) {
                 _uiState.update { it.copy(feedbackMessage = "Failed to save record: ${e.message}") }
             }

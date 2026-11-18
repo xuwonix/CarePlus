@@ -1,5 +1,6 @@
 package com.example.ui.screens.patient
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -18,10 +19,12 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.FolderShared
 import androidx.compose.material.icons.filled.Healing
+import androidx.compose.material.icons.filled.PictureAsPdf
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -30,10 +33,12 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.SecondaryTabRow
 import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -42,6 +47,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -110,7 +118,7 @@ fun PatientRecordsTab(
                     .padding(20.dp)
                     .testTag("add_medical_record_fab")
             ) {
-                Icon(imageVector = Icons.Default.Add, contentDescription = "Add Medical Record")
+                Icon(imageVector = Icons.Default.CameraAlt, contentDescription = "Scan or Upload Medical Record")
             }
         }
     }
@@ -122,7 +130,9 @@ private fun HealthLockerSection(
     diagnosticBookings: List<DiagnosticBooking>,
     onAddRecord: () -> Unit
 ) {
+    val context = LocalContext.current
     var selectedCategory by remember { mutableStateOf("All") }
+    var viewingRecord by remember { mutableStateOf<MedicalRecord?>(null) }
     val categories = listOf("All", "PRESCRIPTION", "LAB_REPORT", "RADIOLOGY", "VITALS")
 
     val filteredRecords = remember(records, selectedCategory) {
@@ -145,13 +155,13 @@ private fun HealthLockerSection(
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text(
-                        text = "Encrypted Digital Health Locker",
+                        text = "Scan & Store Health Records",
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.primary
                     )
                     Text(
-                        text = "Store prescriptions, lab reports, imaging summaries & vitals logs securely.",
+                        text = "Snap a photo or upload PDFs of prescriptions, lab reports, and scans—no manual typing required.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -162,9 +172,9 @@ private fun HealthLockerSection(
                             .fillMaxWidth()
                             .testTag("add_record_button")
                     ) {
-                        Icon(imageVector = Icons.Default.Description, contentDescription = null)
+                        Icon(imageVector = Icons.Default.CameraAlt, contentDescription = null)
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("Add Medical Record / Vitals")
+                        Text("Scan or Upload Prescription / Report")
                     }
                 }
             }
@@ -204,9 +214,9 @@ private fun HealthLockerSection(
                             modifier = Modifier.size(48.dp)
                         )
                         Spacer(modifier = Modifier.height(8.dp))
-                        Text("No Records Saved Yet", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                        Text("No Prescriptions or Reports Yet", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
                         Text(
-                            text = "Tap '+ Add Medical Record' to upload prescriptions, blood work, or blood pressure logs.",
+                            text = "Tap 'Scan or Upload Prescription / Report' above to photograph a paper prescription or upload a lab PDF.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -215,11 +225,25 @@ private fun HealthLockerSection(
             }
         } else {
             items(filteredRecords) { record ->
+                val thumbBitmap = remember(record.attachmentPath, record.fileType) {
+                    if (record.attachmentPath.isNotBlank() && record.fileType == "IMAGE") {
+                        RecordAttachmentHelper.decodeSampledImageBitmap(record.attachmentPath, maxDim = 500)
+                    } else {
+                        null
+                    }
+                }
+
                 Card(
                     shape = RoundedCornerShape(14.dp),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                     border = CardDefaults.outlinedCardBorder(),
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable {
+                            if (record.attachmentPath.isNotBlank()) {
+                                viewingRecord = record
+                            }
+                        }
                 ) {
                     Column(modifier = Modifier.padding(14.dp)) {
                         Row(
@@ -240,8 +264,45 @@ private fun HealthLockerSection(
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
+
+                        if (thumbBitmap != null) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Image(
+                                bitmap = thumbBitmap,
+                                contentDescription = "Scanned ${record.title}",
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(140.dp)
+                                    .clip(RoundedCornerShape(10.dp))
+                            )
+                        } else if (record.attachmentPath.isNotBlank() && record.fileType == "PDF") {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Card(
+                                shape = RoundedCornerShape(10.dp),
+                                colors = CardDefaults.cardColors(
+                                    containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f)
+                                ),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(10.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(Icons.Default.PictureAsPdf, contentDescription = null, tint = MaterialTheme.colorScheme.error)
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = record.attachmentName.ifBlank { "Uploaded PDF Document" },
+                                        style = MaterialTheme.typography.labelMedium,
+                                        fontWeight = FontWeight.SemiBold,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                }
+                            }
+                        }
+
                         if (record.summary.isNotBlank()) {
-                            Spacer(modifier = Modifier.height(4.dp))
+                            Spacer(modifier = Modifier.height(6.dp))
                             Text(record.summary, style = MaterialTheme.typography.bodyMedium)
                         }
                         if (record.keyMetrics.isNotBlank()) {
@@ -260,6 +321,28 @@ private fun HealthLockerSection(
                                     color = MaterialTheme.colorScheme.primary,
                                     modifier = Modifier.padding(8.dp)
                                 )
+                            }
+                        }
+
+                        if (record.attachmentPath.isNotBlank()) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            OutlinedButton(
+                                onClick = {
+                                    if (record.fileType == "PDF") {
+                                        RecordAttachmentHelper.openAttachmentExternally(
+                                            context,
+                                            record.attachmentPath,
+                                            record.fileType
+                                        )
+                                    } else {
+                                        viewingRecord = record
+                                    }
+                                },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Icon(Icons.Default.Visibility, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(if (record.fileType == "PDF") "Open PDF Document" else "View Scanned Document")
                             }
                         }
                     }
@@ -309,6 +392,59 @@ private fun HealthLockerSection(
                 }
             }
         }
+    }
+
+    if (viewingRecord != null) {
+        val rec = viewingRecord!!
+        val fullBitmap = remember(rec.attachmentPath) {
+            RecordAttachmentHelper.decodeSampledImageBitmap(rec.attachmentPath, maxDim = 1600)
+        }
+        AlertDialog(
+            onDismissRequest = { viewingRecord = null },
+            title = {
+                Column {
+                    Text(rec.title, fontWeight = FontWeight.Bold)
+                    Text("${rec.doctorOrFacility} • ${rec.recordDate}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+                }
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (fullBitmap != null) {
+                        Image(
+                            bitmap = fullBitmap,
+                            contentDescription = rec.title,
+                            contentScale = ContentScale.Fit,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(320.dp)
+                                .clip(RoundedCornerShape(10.dp))
+                        )
+                    } else {
+                        Text(
+                            text = "Attachment: ${rec.attachmentName.ifBlank { "Document" }}",
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+                    if (rec.summary.isNotBlank()) {
+                        Text(rec.summary, style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+            },
+            confirmButton = {
+                Button(onClick = { viewingRecord = null }) {
+                    Text("Close")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        RecordAttachmentHelper.openAttachmentExternally(context, rec.attachmentPath, rec.fileType)
+                    }
+                ) {
+                    Text("Open External")
+                }
+            }
+        )
     }
 }
 

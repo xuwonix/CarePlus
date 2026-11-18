@@ -11,7 +11,7 @@ data class InsuranceClaim(
     val patientId: String = "",
     val patientName: String = "",
     val policyNumber: String = "",
-    val insuranceProvider: String = "BlueCross Shield Health",
+    val insuranceProvider: String = "Star Health Assure",
     val hospitalName: String = "",
     val procedureName: String = "",
     val claimedAmount: Double = 0.0,

@@ -13,8 +13,8 @@ data class NearbyFacility(
     val providesHomeCollection: Boolean,
     val departments: List<String>,
     val waitTimeMinutes: Int,
-    val phone: String = "+1 (555) 204-8800",
-    val accreditation: String = "JCI & NABH Accredited",
+    val phone: String = "+91 3712-241305",
+    val accreditation: String = "NABH & NABL Accredited",
     val acceptsCashlessInsurance: Boolean = true
 )
 

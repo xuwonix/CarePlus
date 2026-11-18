@@ -291,7 +291,7 @@ private fun BookingSpecialistCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text("Next: ${specialist.nextAvailableSlot}", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
-                Text("$${specialist.fee.toInt()} / visit", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Text("₹${specialist.fee.toInt()} / visit", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             }
 
             Spacer(modifier = Modifier.height(12.dp))
@@ -406,7 +406,7 @@ private fun DiagnosticsBookingSection(
                                     }
                                     Spacer(modifier = Modifier.width(8.dp))
                                     Column(horizontalAlignment = Alignment.End) {
-                                        Text("$${test.price.toInt()}", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                                        Text("₹${test.price.toInt()}", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
                                         Spacer(modifier = Modifier.height(4.dp))
                                         Button(
                                             onClick = { onBookTest(center, test) },

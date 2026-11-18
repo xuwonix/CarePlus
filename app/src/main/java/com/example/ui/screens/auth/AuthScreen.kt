@@ -131,7 +131,7 @@ fun AuthScreen(
             ) {
                 Icon(
                     imageVector = Icons.Default.LocalHospital,
-                    contentDescription = "CarePulse Medical Logo",
+                    contentDescription = "Nidanmita Medical Logo",
                     tint = Color.White,
                     modifier = Modifier.size(54.dp)
                 )
@@ -140,14 +140,14 @@ fun AuthScreen(
             Spacer(modifier = Modifier.height(16.dp))
 
             Text(
-                text = "CarePulse",
+                text = "Nidanmita",
                 style = MaterialTheme.typography.headlineLarge,
                 fontWeight = FontWeight.ExtraBold,
                 color = MaterialTheme.colorScheme.primary
             )
 
             Text(
-                text = "Integrated Healthcare Network",
+                text = "Tezpur Healthcare Network",
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.secondary
@@ -156,7 +156,7 @@ fun AuthScreen(
             Spacer(modifier = Modifier.height(8.dp))
 
             Text(
-                text = "Connecting patients with local specialists, rapid ambulance dispatch, diagnostic labs, health insurance, and clinical guidance.",
+                text = "Connecting patients across Tezpur with local specialists, rapid ambulance dispatch, diagnostic labs, health insurance, and clinical guidance.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center,
@@ -180,7 +180,7 @@ fun AuthScreen(
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     FeatureRow(Icons.Default.MedicalServices, "Specialist Consultations", "Cardiology, Neurology, Orthopedics, Pediatrics")
-                    FeatureRow(Icons.Default.Emergency, "Emergency Ambulance SOS", "Rapid BLS & ACLS fleet with real-time ETA")
+                    FeatureRow(Icons.Default.Emergency, "Emergency Ambulance SOS", "ICU Cardiac & Basic Medical ambulances with live ETA")
                     FeatureRow(Icons.Default.Biotech, "Diagnostic Centers", "Home blood collection, MRIs, and instant digital reports")
                     FeatureRow(Icons.Default.VerifiedUser, "Health Insurance", "Instant cashless pre-authorization and claims tracking")
                     FeatureRow(Icons.Default.Security, "Procedure Guidance & Locker", "Step-by-step pre/post-op care & digital health locker")

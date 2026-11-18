@@ -6,13 +6,17 @@ import android.content.pm.PackageManager
 import android.location.Geocoder
 import android.location.LocationManager
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -20,11 +24,21 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CameraAlt
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.MyLocation
+import androidx.compose.material.icons.filled.PhotoLibrary
+import androidx.compose.material.icons.filled.PictureAsPdf
+import androidx.compose.material.icons.filled.UploadFile
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -35,7 +49,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
@@ -44,6 +61,9 @@ import androidx.core.content.ContextCompat
 import com.example.data.model.FamilyMember
 import com.example.data.model.UserProfile
 import com.example.data.repository.HealthcareCatalog
+import java.io.File
+import java.text.SimpleDateFormat
+import java.util.Date
 import java.util.Locale
 
 @Composable
@@ -51,10 +71,10 @@ fun SubmitInsuranceClaimModal(
     onDismiss: () -> Unit,
     onConfirm: (policy: String, provider: String, hospital: String, procedure: String, amount: Double, claimType: String, docRef: String) -> Unit
 ) {
-    var policyNumber by remember { mutableStateOf("BCS-9923842") }
-    var hospitalName by remember { mutableStateOf("Metro General Trauma & Cardiac Center") }
+    var policyNumber by remember { mutableStateOf("SH-AS-784210") }
+    var hospitalName by remember { mutableStateOf("Baptist Christian Hospital, Tezpur") }
     var procedureName by remember { mutableStateOf("Upper GI Endoscopy & Biopsy") }
-    var amountText by remember { mutableStateOf("1250.0") }
+    var amountText by remember { mutableStateOf("12500") }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -90,7 +110,7 @@ fun SubmitInsuranceClaimModal(
                 OutlinedTextField(
                     value = amountText,
                     onValueChange = { amountText = it },
-                    label = { Text("Estimated / Billed Amount ($)") },
+                    label = { Text("Estimated / Billed Amount (₹)") },
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp)
                 )
@@ -99,8 +119,8 @@ fun SubmitInsuranceClaimModal(
         confirmButton = {
             Button(
                 onClick = {
-                    val amount = amountText.toDoubleOrNull() ?: 1000.0
-                    onConfirm(policyNumber, "BlueCross Shield", hospitalName, procedureName, amount, "CASHLESS", "DOC-REF-${(100..999).random()}")
+                    val amount = amountText.toDoubleOrNull() ?: 10000.0
+                    onConfirm(policyNumber, "Star Health Assure", hospitalName, procedureName, amount, "CASHLESS", "DOC-REF-${(100..999).random()}")
                 },
                 modifier = Modifier.testTag("submit_claim_confirm_button")
             ) {
@@ -117,31 +137,289 @@ fun SubmitInsuranceClaimModal(
 fun AddMedicalRecordModal(
     familyMembers: List<FamilyMember>,
     onDismiss: () -> Unit,
-    onConfirm: (title: String, category: String, doctor: String, date: String, summary: String, metrics: String, memberName: String) -> Unit
+    onConfirm: (
+        title: String,
+        category: String,
+        doctor: String,
+        date: String,
+        summary: String,
+        metrics: String,
+        memberName: String,
+        fileType: String,
+        attachmentPath: String,
+        attachmentName: String
+    ) -> Unit
 ) {
+    val context = LocalContext.current
     val memberOptions = remember(familyMembers) {
         listOf("Self") + familyMembers.map { "${it.name} (${it.relationship})" }
     }
-    var selectedMember by remember { mutableStateOf("Self") }
-    var title by remember { mutableStateOf("") }
-    var category by remember { mutableStateOf("PRESCRIPTION") }
-    var doctor by remember { mutableStateOf("Dr. Elena Rostova, MD") }
-    var date by remember { mutableStateOf("Nov 18, 2026") }
-    var summary by remember { mutableStateOf("") }
-    var metrics by remember { mutableStateOf("BP: 120/80 mmHg | Heart Rate: 72 bpm | Glucose: 95 mg/dL") }
+    val todayLabel = remember {
+        SimpleDateFormat("MMM d, yyyy", Locale.getDefault()).format(Date())
+    }
 
-    val categories = listOf("PRESCRIPTION", "LAB_REPORT", "RADIOLOGY", "VITALS")
+    var selectedMember by remember { mutableStateOf("Self") }
+    var category by remember { mutableStateOf("PRESCRIPTION") }
+    var title by remember { mutableStateOf("") }
+    var doctor by remember { mutableStateOf("") }
+    var date by remember { mutableStateOf(todayLabel) }
+    var summary by remember { mutableStateOf("") }
+    var metrics by remember { mutableStateOf("") }
+    var showOptionalNotes by remember { mutableStateOf(false) }
+
+    var attachment by remember { mutableStateOf<SavedAttachment?>(null) }
+    var pendingCameraFile by remember { mutableStateOf<File?>(null) }
+    var scanError by remember { mutableStateOf<String?>(null) }
+
+    val categories = listOf("PRESCRIPTION", "LAB_REPORT", "RADIOLOGY", "DISCHARGE_SUMMARY", "VITALS")
+
+    // Photo Picker (Zero permissions required)
+    val photoPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia()
+    ) { uri ->
+        if (uri != null) {
+            val saved = RecordAttachmentHelper.copyUriToAttachments(context, uri)
+            if (saved != null) {
+                attachment = saved
+                scanError = null
+            } else {
+                scanError = "Could not load selected photo."
+            }
+        }
+    }
+
+    // Document Picker for PDFs & image scans (Zero permissions required)
+    val documentPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) {
+            val saved = RecordAttachmentHelper.copyUriToAttachments(context, uri)
+            if (saved != null) {
+                attachment = saved
+                scanError = null
+            } else {
+                scanError = "Could not attach selected file."
+            }
+        }
+    }
+
+    // Camera capture launcher
+    val takePictureLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.TakePicture()
+    ) { success ->
+        val capturedFile = pendingCameraFile
+        if (success && capturedFile != null && capturedFile.exists()) {
+            val saved = RecordAttachmentHelper.copyFileToAttachments(
+                context = context,
+                sourceFile = capturedFile,
+                preferredName = "Scan_${category.lowercase()}_${System.currentTimeMillis()}.jpg"
+            )
+            if (saved != null) {
+                attachment = saved
+                scanError = null
+            } else {
+                scanError = "Could not save scanned photo."
+            }
+        }
+    }
+
+    fun launchCameraScan() {
+        val (uri, file) = RecordAttachmentHelper.createCameraOutputUri(context)
+        pendingCameraFile = file
+        takePictureLauncher.launch(uri)
+    }
+
+    val cameraPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) {
+            launchCameraScan()
+        } else {
+            scanError = "Camera permission denied. Use Gallery or PDF / File upload instead."
+        }
+    }
+
+    val previewBitmap = remember(attachment?.localPath, attachment?.fileType) {
+        val att = attachment
+        if (att != null && att.fileType == "IMAGE") {
+            RecordAttachmentHelper.decodeSampledImageBitmap(att.localPath, maxDim = 600)
+        } else {
+            null
+        }
+    }
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Add Medical Record to Locker", fontWeight = FontWeight.Bold) },
+        title = {
+            Column {
+                Text("Scan or Upload Record", fontWeight = FontWeight.Bold)
+                Text(
+                    text = "Snap a photo or upload a PDF of your prescription or lab report",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        },
         text = {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
+                // Scan / Upload Actions Card
+                Card(
+                    shape = RoundedCornerShape(14.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f)
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier.padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(
+                            text = "1. Scan or Attach Document",
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Button(
+                                onClick = {
+                                    val granted = ContextCompat.checkSelfPermission(
+                                        context,
+                                        Manifest.permission.CAMERA
+                                    ) == PackageManager.PERMISSION_GRANTED
+                                    if (granted) {
+                                        launchCameraScan()
+                                    } else {
+                                        cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
+                                    }
+                                },
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .testTag("scan_camera_button"),
+                                shape = RoundedCornerShape(10.dp)
+                            ) {
+                                Icon(Icons.Default.CameraAlt, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("Scan", style = MaterialTheme.typography.labelSmall)
+                            }
+
+                            OutlinedButton(
+                                onClick = {
+                                    photoPickerLauncher.launch(
+                                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                                    )
+                                },
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .testTag("upload_gallery_button"),
+                                shape = RoundedCornerShape(10.dp)
+                            ) {
+                                Icon(Icons.Default.PhotoLibrary, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("Photo", style = MaterialTheme.typography.labelSmall)
+                            }
+
+                            OutlinedButton(
+                                onClick = {
+                                    documentPickerLauncher.launch(arrayOf("application/pdf", "image/*"))
+                                },
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .testTag("upload_pdf_button"),
+                                shape = RoundedCornerShape(10.dp)
+                            ) {
+                                Icon(Icons.Default.UploadFile, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("PDF", style = MaterialTheme.typography.labelSmall)
+                            }
+                        }
+
+                        if (scanError != null) {
+                            Text(
+                                text = scanError!!,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.error
+                            )
+                        }
+
+                        if (attachment != null) {
+                            Card(
+                                shape = RoundedCornerShape(10.dp),
+                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Column(modifier = Modifier.padding(10.dp)) {
+                                    if (previewBitmap != null) {
+                                        Image(
+                                            bitmap = previewBitmap,
+                                            contentDescription = "Scanned document preview",
+                                            contentScale = ContentScale.Crop,
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .height(140.dp)
+                                                .clip(RoundedCornerShape(8.dp))
+                                        )
+                                        Spacer(modifier = Modifier.height(6.dp))
+                                    }
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            modifier = Modifier.weight(1f)
+                                        ) {
+                                            Icon(
+                                                imageVector = if (attachment!!.fileType == "PDF") Icons.Default.PictureAsPdf else Icons.Default.PhotoLibrary,
+                                                contentDescription = null,
+                                                tint = MaterialTheme.colorScheme.primary,
+                                                modifier = Modifier.size(20.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Column {
+                                                Text(
+                                                    text = attachment!!.displayName,
+                                                    style = MaterialTheme.typography.labelMedium,
+                                                    fontWeight = FontWeight.Bold
+                                                )
+                                                Text(
+                                                    text = "${attachment!!.fileType} Ready to Upload",
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    color = MaterialTheme.colorScheme.secondary
+                                                )
+                                            }
+                                        }
+                                        IconButton(onClick = { attachment = null }) {
+                                            Icon(Icons.Default.Delete, contentDescription = "Remove attachment", tint = MaterialTheme.colorScheme.error)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Text("Document Type:", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    items(categories) { cat ->
+                        FilterChip(
+                            selected = category == cat,
+                            onClick = { category = cat },
+                            label = { Text(cat.replace("_", " "), style = MaterialTheme.typography.labelSmall) }
+                        )
+                    }
+                }
+
                 Text("Record For:", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     items(memberOptions) { member ->
@@ -156,53 +434,84 @@ fun AddMedicalRecordModal(
                 OutlinedTextField(
                     value = title,
                     onValueChange = { title = it },
-                    label = { Text("Document Title (e.g. Cardiology Rx, Lipid Panel)") },
-                    modifier = Modifier.fillMaxWidth().testTag("record_title_input"),
+                    label = { Text("Title (optional — auto-named if empty)") },
+                    placeholder = {
+                        val defaultCat = category.replace("_", " ").lowercase()
+                            .replaceFirstChar { it.uppercase() }
+                        Text("$defaultCat • $date")
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("record_title_input"),
                     shape = RoundedCornerShape(12.dp)
                 )
-
-                Text("Category:", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    items(categories) { cat ->
-                        FilterChip(
-                            selected = category == cat,
-                            onClick = { category = cat },
-                            label = { Text(cat.replace("_", " "), style = MaterialTheme.typography.labelSmall) }
-                        )
-                    }
-                }
 
                 OutlinedTextField(
                     value = doctor,
                     onValueChange = { doctor = it },
-                    label = { Text("Doctor or Facility Name") },
+                    label = { Text("Doctor or Lab Name (optional)") },
+                    placeholder = { Text("e.g. Apollo Tezpur or Dr. Baruah") },
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp)
                 )
 
-                OutlinedTextField(
-                    value = summary,
-                    onValueChange = { summary = it },
-                    label = { Text("Clinical Notes / Instructions") },
-                    modifier = Modifier.fillMaxWidth().height(80.dp),
-                    shape = RoundedCornerShape(12.dp)
-                )
+                TextButton(
+                    onClick = { showOptionalNotes = !showOptionalNotes },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(if (showOptionalNotes) "Hide optional notes" else "Add optional notes or vitals (optional)")
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Icon(
+                        imageVector = if (showOptionalNotes) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                        contentDescription = null
+                    )
+                }
 
-                OutlinedTextField(
-                    value = metrics,
-                    onValueChange = { metrics = it },
-                    label = { Text("Vital Signs & Key Values") },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp)
-                )
+                if (showOptionalNotes) {
+                    OutlinedTextField(
+                        value = summary,
+                        onValueChange = { summary = it },
+                        label = { Text("Notes (optional)") },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(74.dp),
+                        shape = RoundedCornerShape(12.dp)
+                    )
+
+                    OutlinedTextField(
+                        value = metrics,
+                        onValueChange = { metrics = it },
+                        label = { Text("Vitals / Key Numbers (optional)") },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp)
+                    )
+                }
             }
         },
         confirmButton = {
             Button(
                 onClick = {
-                    val safeTitle = title.ifBlank { "Clinical Summary Note" }
-                    onConfirm(safeTitle, category, doctor, date, summary, metrics, selectedMember)
+                    val catLabel = category.replace("_", " ").lowercase()
+                        .replaceFirstChar { it.uppercase() }
+                    val finalTitle = title.trim().ifBlank {
+                        if (attachment != null) "Scanned $catLabel" else "$catLabel Note"
+                    }
+                    val finalDoctor = doctor.trim().ifBlank { "Uploaded Document" }
+                    val finalFileType = attachment?.fileType ?: "NOTE"
+                    onConfirm(
+                        finalTitle,
+                        category,
+                        finalDoctor,
+                        date,
+                        summary.trim(),
+                        metrics.trim(),
+                        selectedMember,
+                        finalFileType,
+                        attachment?.localPath ?: "",
+                        attachment?.displayName ?: ""
+                    )
                 },
+                enabled = attachment != null || title.isNotBlank() || summary.isNotBlank() || metrics.isNotBlank(),
                 modifier = Modifier.testTag("save_record_button")
             ) {
                 Text("Save to Locker")
@@ -224,7 +533,7 @@ fun EditPatientProfileModal(
     var phone by remember { mutableStateOf(currentProfile.phone) }
     var age by remember { mutableStateOf(currentProfile.age) }
     var gender by remember { mutableStateOf(currentProfile.gender) }
-    var bloodGroup by remember { mutableStateOf(currentProfile.bloodGroup) }
+    var bloodGroup by remember { mutableStateOf(currentProfile.bloodGroup.ifBlank { "O+" }) }
     var allergies by remember { mutableStateOf(currentProfile.allergies) }
     var chronicConditions by remember { mutableStateOf(currentProfile.chronicConditions) }
     var emergencyContactName by remember { mutableStateOf(currentProfile.emergencyContactName) }
@@ -330,7 +639,8 @@ fun EditPatientProfileModal(
                             chronicConditions = chronicConditions.trim(),
                             emergencyContactName = emergencyContactName.trim(),
                             emergencyContactPhone = emergencyContactPhone.trim(),
-                            savedAddress = savedAddress.trim()
+                            savedAddress = savedAddress.trim(),
+                            onboardingCompleted = true
                         )
                     )
                 },
@@ -355,10 +665,10 @@ fun AddFamilyMemberModal(
 
     var name by remember { mutableStateOf("") }
     var relationship by remember { mutableStateOf("Spouse") }
-    var age by remember { mutableStateOf("29") }
+    var age by remember { mutableStateOf("") }
     var gender by remember { mutableStateOf("Female") }
     var bloodGroup by remember { mutableStateOf("O+") }
-    var allergies by remember { mutableStateOf("None") }
+    var allergies by remember { mutableStateOf("") }
     var phone by remember { mutableStateOf("") }
 
     AlertDialog(
@@ -463,8 +773,8 @@ fun LocationPickerModal(
     onConfirm: (area: String, address: String) -> Unit
 ) {
     val context = LocalContext.current
-    var selectedArea by remember { mutableStateOf(currentArea.ifBlank { "Downtown Metro" }) }
-    var address by remember { mutableStateOf(currentAddress.ifBlank { "420 Maple Avenue, Apt 3B, Metro City" }) }
+    var selectedArea by remember { mutableStateOf(currentArea.ifBlank { "Mission Chariali, Tezpur" }) }
+    var address by remember { mutableStateOf(currentAddress) }
     var locationStatus by remember { mutableStateOf<String?>(null) }
 
     fun resolveDeviceCoarseLocation(ctx: Context) {
@@ -479,15 +789,15 @@ fun LocationPickerModal(
                 val addresses = geocoder.getFromLocation(loc.latitude, loc.longitude, 1)
                 val resolved = addresses?.firstOrNull()
                 if (resolved != null) {
-                    val line = resolved.getAddressLine(0) ?: "${resolved.locality ?: "Metro City"}"
+                    val line = resolved.getAddressLine(0) ?: (resolved.locality ?: "Tezpur, Assam")
                     address = line
                     val areaMatch = HealthcareCatalog.metroAreas.firstOrNull {
-                        line.contains(it.substringBefore(" "), ignoreCase = true)
-                    } ?: "Midtown Medical District"
+                        line.contains(it.substringBefore(","), ignoreCase = true)
+                    } ?: "Mission Chariali, Tezpur"
                     selectedArea = areaMatch
                     locationStatus = "Detected device location: $areaMatch"
                 } else {
-                    locationStatus = "GPS lock (${String.format(Locale.US, "%.2f, %.2f", loc.latitude, loc.longitude)}) mapped to Downtown Metro"
+                    locationStatus = "GPS lock (${String.format(Locale.US, "%.2f, %.2f", loc.latitude, loc.longitude)}) mapped to Mission Chariali, Tezpur"
                 }
             } else {
                 locationStatus = "No cached GPS fix on emulator; pick a service zone below."
@@ -560,6 +870,7 @@ fun LocationPickerModal(
                     value = address,
                     onValueChange = { address = it },
                     label = { Text("Home / Pickup Address") },
+                    placeholder = { Text("Street, Apt, City") },
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp)
                 )

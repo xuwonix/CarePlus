@@ -15,11 +15,11 @@ data class AmbulanceRequest(
     val emergencyType: String = "CARDIAC_OR_RESPIRATORY", // TRAUMA, CARDIAC_OR_RESPIRATORY, MATERNITY, STROKE, GENERAL
     val ambulanceType: String = "ADVANCED_CARDIAC", // BASIC_LIFE_SUPPORT, ADVANCED_CARDIAC, PATIENT_TRANSPORT
     val status: String = "DISPATCHED", // DISPATCHED, EN_ROUTE, ARRIVED, COMPLETED
-    val vehicleNumber: String = "EMS-8492",
-    val driverName: String = "Captain Marcus Vance",
-    val driverPhone: String = "+1 (555) 019-2834",
+    val vehicleNumber: String = "AS-12-EM-1084",
+    val driverName: String = "Tezpur 108 EMS Team",
+    val driverPhone: String = "+91 3712-108-420",
     val etaMinutes: Long = 8L,
-    val hospitalDestination: String = "Metro General Trauma & Cardiac Center",
+    val hospitalDestination: String = "Tezpur Medical College & Hospital (TMCH)",
     @ServerTimestamp val createdAt: Timestamp? = null,
     @ServerTimestamp val updatedAt: Timestamp? = null
 )

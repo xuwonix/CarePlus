@@ -204,7 +204,7 @@ fun DoctorProfileScreen(
                             }
                             Spacer(modifier = Modifier.weight(1f))
                             Text(
-                                text = "$${specialist.fee.toInt()}",
+                                text = "₹${specialist.fee.toInt()}",
                                 style = MaterialTheme.typography.titleLarge,
                                 fontWeight = FontWeight.ExtraBold,
                                 color = MaterialTheme.colorScheme.primary
