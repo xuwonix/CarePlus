@@ -23,6 +23,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Chat
 import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.Directions
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.MedicalServices
 import androidx.compose.material.icons.filled.Search
@@ -42,6 +43,7 @@ import androidx.compose.material3.SecondaryTabRow
 import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -50,6 +52,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -62,6 +65,7 @@ import com.example.data.model.HomeCareService
 import com.example.data.model.Specialist
 import com.example.ui.i18n.LocalAppStrings
 import com.example.ui.viewmodel.HealthcareUiState
+import com.example.util.MapsNavigationHelper
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -80,7 +84,8 @@ fun PatientBookingTab(
     onRescheduleHomeCare: (HomeCareBooking) -> Unit,
     onCancelHomeCare: (String) -> Unit,
     onOpenChatWithDoctor: (doctorName: String, doctorId: String) -> Unit,
-    onLockedChatAttempt: (Specialist) -> Unit
+    onLockedChatAttempt: (Specialist) -> Unit,
+    onOpenAiBookingHelper: () -> Unit
 ) {
     val strings = LocalAppStrings.current
     val subTabs = listOf(
@@ -127,13 +132,15 @@ fun PatientBookingTab(
                 onOpenProfile = onOpenDoctorProfile,
                 onBook = onBookDoctor,
                 onChat = { onOpenChatWithDoctor(it.name, it.id) },
-                onLockedChatAttempt = onLockedChatAttempt
+                onLockedChatAttempt = onLockedChatAttempt,
+                onOpenAiBookingHelper = onOpenAiBookingHelper
             )
             1 -> DiagnosticsBookingSection(
                 centers = state.diagnosticCenters,
                 searchQuery = localSearch,
                 onSearchChange = { localSearch = it },
-                onBookTest = onBookTest
+                onBookTest = onBookTest,
+                onOpenAiBookingHelper = onOpenAiBookingHelper
             )
             2 -> HomeCareBookingSection(
                 services = state.homeCareServices,
@@ -167,7 +174,8 @@ private fun DoctorsBookingSection(
     onOpenProfile: (Specialist) -> Unit,
     onBook: (Specialist) -> Unit,
     onChat: (Specialist) -> Unit,
-    onLockedChatAttempt: (Specialist) -> Unit
+    onLockedChatAttempt: (Specialist) -> Unit,
+    onOpenAiBookingHelper: () -> Unit
 ) {
     val strings = LocalAppStrings.current
     val specialties = listOf("All", "Cardiology", "Neurology", "Orthopedics", "Pediatrics", "Gynecology", "Dermatology", "General Medicine")
@@ -189,9 +197,13 @@ private fun DoctorsBookingSection(
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(16.dp),
+        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 88.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
+        item {
+            AiBookingHelperBannerCard(onOpenAiHelper = onOpenAiBookingHelper)
+        }
+
         item {
             OutlinedTextField(
                 value = searchQuery,
@@ -264,6 +276,7 @@ private fun BookingSpecialistCard(
     onChat: () -> Unit
 ) {
     val strings = LocalAppStrings.current
+    val context = LocalContext.current
     Card(
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
@@ -302,8 +315,37 @@ private fun BookingSpecialistCard(
             Spacer(modifier = Modifier.height(8.dp))
             Text(specialist.bio, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(modifier = Modifier.height(6.dp))
-            Text("${specialist.clinicHospital} • ${specialist.address}", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.secondary)
-            Spacer(modifier = Modifier.height(8.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "${specialist.clinicHospital} • ${specialist.address}",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.secondary,
+                    modifier = Modifier.weight(1f)
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                TextButton(
+                    onClick = { MapsNavigationHelper.openClinicDirections(context, specialist) },
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                    modifier = Modifier.testTag("doctor_clinic_directions_${specialist.id}")
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Directions,
+                        contentDescription = strings.directionsButton,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = strings.directionsButton,
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(6.dp))
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -360,14 +402,20 @@ private fun DiagnosticsBookingSection(
     centers: List<DiagnosticCenter>,
     searchQuery: String,
     onSearchChange: (String) -> Unit,
-    onBookTest: (DiagnosticCenter, DiagnosticTest) -> Unit
+    onBookTest: (DiagnosticCenter, DiagnosticTest) -> Unit,
+    onOpenAiBookingHelper: () -> Unit
 ) {
     val strings = LocalAppStrings.current
+    val context = LocalContext.current
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(16.dp),
+        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 88.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
+        item {
+            AiBookingHelperBannerCard(onOpenAiHelper = onOpenAiBookingHelper)
+        }
+
         item {
             OutlinedTextField(
                 value = searchQuery,
@@ -411,6 +459,25 @@ private fun DiagnosticsBookingSection(
                             if (center.providesHomeCollection) {
                                 SuggestionChip(onClick = {}, label = { Text("Home Pickup") })
                             }
+                        }
+
+                        Spacer(modifier = Modifier.height(8.dp))
+                        OutlinedButton(
+                            onClick = { MapsNavigationHelper.openDiagnosticCenterDirections(context, center) },
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                            modifier = Modifier.testTag("diagnostic_center_directions_${center.id}")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Directions,
+                                contentDescription = strings.directionsButton,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = strings.getDirectionsMaps,
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.SemiBold
+                            )
                         }
 
                         Spacer(modifier = Modifier.height(10.dp))

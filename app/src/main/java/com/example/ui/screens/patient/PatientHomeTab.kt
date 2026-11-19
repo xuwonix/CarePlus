@@ -69,7 +69,8 @@ fun PatientHomeTab(
     onLockedChatAttempt: (Specialist) -> Unit,
     onSelectProcedure: (ProcedureGuide) -> Unit,
     onOpenInsuranceHub: () -> Unit,
-    onQuickEmergencySos: () -> Unit
+    onQuickEmergencySos: () -> Unit,
+    onOpenAiBookingHelper: () -> Unit
 ) {
     val strings = LocalAppStrings.current
     val activeAmbulance = state.patientAmbulanceRequests.firstOrNull { it.status != "COMPLETED" }
@@ -84,7 +85,7 @@ fun PatientHomeTab(
         modifier = Modifier
             .fillMaxSize()
             .testTag("patient_home_tab"),
-        contentPadding = PaddingValues(bottom = 24.dp),
+        contentPadding = PaddingValues(bottom = 88.dp),
         verticalArrangement = Arrangement.spacedBy(20.dp)
     ) {
         // 1. Greeting, Location Pill & Universal Search Header
@@ -277,6 +278,11 @@ fun PatientHomeTab(
                             )
                         }
                     }
+                    Spacer(modifier = Modifier.height(14.dp))
+                    AiBookingHelperBannerCard(
+                        onOpenAiHelper = onOpenAiBookingHelper,
+                        modifier = Modifier.padding(horizontal = 16.dp)
+                    )
                 }
             } else {
                 if (matchedDoctors.isNotEmpty()) {
@@ -350,6 +356,14 @@ fun PatientHomeTab(
                 }
             }
         } else {
+            // Gemini AI Booking Assistant Banner (supports Assamese, Hindi, English)
+            item {
+                AiBookingHelperBannerCard(
+                    onOpenAiHelper = onOpenAiBookingHelper,
+                    modifier = Modifier.padding(horizontal = 16.dp)
+                )
+            }
+
             // Upcoming Appointments (Doctors & Lab Tests)
             item {
                 Column(modifier = Modifier.fillMaxWidth()) {

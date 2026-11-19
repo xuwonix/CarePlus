@@ -25,7 +25,9 @@ data class DiagnosticCenter(
     val providesHomeCollection: Boolean,
     val accreditation: String = "NABL & CAP Accredited",
     val operatingHours: String = "06:30 AM - 09:00 PM",
-    val testsOffered: List<DiagnosticTest>
+    val testsOffered: List<DiagnosticTest>,
+    val latitude: Double = 0.0,
+    val longitude: Double = 0.0
 )
 
 @Keep

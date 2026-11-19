@@ -15,7 +15,9 @@ data class NearbyFacility(
     val waitTimeMinutes: Int,
     val phone: String = "+91 3712-241305",
     val accreditation: String = "NABH & NABL Accredited",
-    val acceptsCashlessInsurance: Boolean = true
+    val acceptsCashlessInsurance: Boolean = true,
+    val latitude: Double = 0.0,
+    val longitude: Double = 0.0
 )
 
 data class MedicalSpecialtyItem(

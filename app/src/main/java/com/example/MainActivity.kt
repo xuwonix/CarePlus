@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Emergency
@@ -41,6 +42,7 @@ import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -98,6 +100,7 @@ import com.example.data.repository.HealthcareRepository
 import com.example.ui.screens.auth.AuthScreen
 import com.example.ui.screens.auth.appSignOut
 import com.example.ui.screens.chat.ChatConsultationScreen
+import com.example.ui.screens.chat.GeminiBookingChatScreen
 import com.example.ui.screens.patient.AddFamilyMemberModal
 import com.example.ui.screens.patient.AddInsurancePolicyModal
 import com.example.ui.screens.patient.AddMedicalRecordModal
@@ -133,7 +136,10 @@ import com.example.ui.i18n.LocalAppLanguage
 import com.example.ui.i18n.LocalAppStrings
 import com.example.ui.i18n.stringsForLanguage
 import com.example.ui.viewmodel.CarePulseViewModel
+import com.example.ui.viewmodel.GeminiBookingViewModel
 import com.example.ui.viewmodel.MainNavTab
+import com.example.util.MapsNavigationHelper
+import com.example.util.configureAppCheck
 import com.google.firebase.Firebase
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.auth
@@ -148,6 +154,7 @@ private sealed class RescheduleTarget {
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        configureAppCheck(this, intent)
         enableEdgeToEdge()
         setContent {
             CarePulseRootApp()
@@ -202,8 +209,10 @@ fun CarePulseRootApp() {
                 val uid = currentUser!!.uid
                 key(uid) {
                     val viewModel: CarePulseViewModel = viewModel(key = uid)
+                    val geminiBookingViewModel: GeminiBookingViewModel = viewModel(key = "gemini_$uid")
                     PatientMainApp(
                         viewModel = viewModel,
+                        geminiBookingViewModel = geminiBookingViewModel,
                         selectedLanguage = selectedLanguage,
                         onSelectLanguage = onSelectLanguage,
                         isDarkMode = isDarkMode,
@@ -222,6 +231,7 @@ fun CarePulseRootApp() {
 @Composable
 fun PatientMainApp(
     viewModel: CarePulseViewModel,
+    geminiBookingViewModel: GeminiBookingViewModel,
     selectedLanguage: AppLanguage,
     onSelectLanguage: (AppLanguage) -> Unit,
     isDarkMode: Boolean,
@@ -244,6 +254,7 @@ fun PatientMainApp(
     var showHelpSupportScreen by remember { mutableStateOf(false) }
     var showInsuranceHubScreen by remember { mutableStateOf(false) }
     var insuranceHubInitialTab by remember { mutableStateOf(0) }
+    var showGeminiBookingChat by remember { mutableStateOf(false) }
 
     // Modals
     var showAmbulanceModal by remember { mutableStateOf(false) }
@@ -438,6 +449,22 @@ fun PatientMainApp(
             )
         }
 
+        showGeminiBookingChat -> {
+            GeminiBookingChatScreen(
+                geminiViewModel = geminiBookingViewModel,
+                selectedLocationArea = uiState.selectedLocationArea,
+                onSelectAppLanguage = onSelectLanguage,
+                onBookDoctor = { specialist -> bookingSpecialist = specialist },
+                onBookLabTest = { center, test -> bookingDiagnostic = Pair(center, test) },
+                onBookHomeCare = { service -> bookingHomeCare = service },
+                onOpenFacilityDirections = { facility ->
+                    MapsNavigationHelper.openFacilityDirections(context, facility)
+                },
+                onBack = { showGeminiBookingChat = false },
+                snackbarHostState = snackbarHostState
+            )
+        }
+
         else -> {
             BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
                 val useNavigationRail = maxWidth >= 840.dp
@@ -566,6 +593,28 @@ fun PatientMainApp(
                             )
                         }
                     },
+                    floatingActionButton = {
+                        if (uiState.selectedTab == MainNavTab.HOME || uiState.selectedTab == MainNavTab.BOOKING) {
+                            ExtendedFloatingActionButton(
+                                onClick = { showGeminiBookingChat = true },
+                                icon = {
+                                    Icon(
+                                        imageVector = Icons.Default.AutoAwesome,
+                                        contentDescription = strings.aiAssistantTitle
+                                    )
+                                },
+                                text = {
+                                    Text(
+                                        text = strings.aiAssistantFabLabel,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                },
+                                containerColor = MaterialTheme.colorScheme.primary,
+                                contentColor = MaterialTheme.colorScheme.onPrimary,
+                                modifier = Modifier.testTag("ai_booking_assistant_fab")
+                            )
+                        }
+                    },
                     snackbarHost = { SnackbarHost(snackbarHostState) }
                 ) { innerPadding ->
                     Row(
@@ -614,6 +663,9 @@ fun PatientMainApp(
                                         },
                                         onQuickEmergencySos = {
                                             viewModel.selectMainTab(MainNavTab.EMERGENCY)
+                                        },
+                                        onOpenAiBookingHelper = {
+                                            showGeminiBookingChat = true
                                         }
                                     )
                                 }
@@ -646,6 +698,9 @@ fun PatientMainApp(
                                         },
                                         onLockedChatAttempt = { specialist ->
                                             lockedChatDoctor = specialist
+                                        },
+                                        onOpenAiBookingHelper = {
+                                            showGeminiBookingChat = true
                                         }
                                     )
                                 }

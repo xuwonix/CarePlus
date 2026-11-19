@@ -20,6 +20,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Directions
 import androidx.compose.material.icons.filled.Emergency
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
@@ -50,6 +51,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -57,6 +59,7 @@ import androidx.compose.ui.unit.dp
 import com.example.data.model.AmbulanceRequest
 import com.example.data.model.NearbyFacility
 import com.example.ui.i18n.LocalAppStrings
+import com.example.util.MapsNavigationHelper
 
 @Composable
 fun PatientEmergencyTab(
@@ -66,6 +69,7 @@ fun PatientEmergencyTab(
     onTriggerSOS: () -> Unit,
     onResolveAmbulance: (String) -> Unit
 ) {
+    val context = LocalContext.current
     val strings = LocalAppStrings.current
     LazyColumn(
         modifier = Modifier
@@ -196,38 +200,58 @@ fun PatientEmergencyTab(
                 border = CardDefaults.outlinedCardBorder(),
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Row(
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    Box(
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(46.dp)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(MaterialTheme.colorScheme.errorContainer),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.LocalHospital,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.error
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(14.dp))
+                        Column(
+                            modifier = Modifier.weight(1f),
+                            verticalArrangement = Arrangement.spacedBy(3.dp)
+                        ) {
+                            Text(hospital.name, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                            Text("${hospital.distanceKm} km • ${hospital.address}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(
+                                text = "ER Wait: ~${hospital.waitTimeMinutes} min • ${hospital.phone}",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.error,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                    }
+                    OutlinedButton(
+                        onClick = { MapsNavigationHelper.openFacilityDirections(context, hospital) },
+                        shape = RoundedCornerShape(10.dp),
                         modifier = Modifier
-                            .size(46.dp)
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(MaterialTheme.colorScheme.errorContainer),
-                        contentAlignment = Alignment.Center
+                            .fillMaxWidth()
+                            .testTag("emergency_hospital_directions_${hospital.id}")
                     ) {
                         Icon(
-                            imageVector = Icons.Default.LocalHospital,
+                            imageVector = Icons.Default.Directions,
                             contentDescription = null,
-                            tint = MaterialTheme.colorScheme.error
+                            modifier = Modifier.size(16.dp)
                         )
-                    }
-                    Spacer(modifier = Modifier.width(14.dp))
-                    Column(
-                        modifier = Modifier.weight(1f),
-                        verticalArrangement = Arrangement.spacedBy(3.dp)
-                    ) {
-                        Text(hospital.name, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-                        Text("${hospital.distanceKm} km • ${hospital.address}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Text(
-                            text = "ER Wait: ~${hospital.waitTimeMinutes} min • ${hospital.phone}",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.error,
-                            fontWeight = FontWeight.SemiBold
-                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(strings.getDirectionsMaps, fontWeight = FontWeight.SemiBold)
                     }
                 }
             }

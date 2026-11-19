@@ -172,7 +172,30 @@ data class AppStrings(
     val buyGetQuote: String,
     val checkEligibility: String,
     val askAdvisor: String,
-    val chatWithAdvisor: String
+    val chatWithAdvisor: String,
+
+    // Directions & AI Booking Assistant
+    val directionsButton: String,
+    val getDirectionsMaps: String,
+    val aiAssistantTitle: String,
+    val aiAssistantSubtitle: String,
+    val aiAssistantFabLabel: String,
+    val aiAssistantBannerTitle: String,
+    val aiAssistantBannerDesc: String,
+    val aiAssistantBannerCta: String,
+    val aiAssistantInputPlaceholder: String,
+    val aiAssistantBookAction: String,
+    val aiAssistantNewChat: String,
+    val voiceTapToSpeak: String,
+    val voiceListeningHint: String,
+    val voiceStopAndSend: String,
+    val voiceCancel: String,
+    val voiceAutoSpeakOn: String,
+    val voiceAutoSpeakOff: String,
+    val voiceListenLabel: String,
+    val voiceStopSpeakingLabel: String,
+    val voiceMessageLabel: String,
+    val voicePermissionDenied: String
 ) {
     fun categoryTitle(category: HealthServiceCategory): String = when (category) {
         HealthServiceCategory.SPECIALIST_CONSULT -> catDoctorsTitle
@@ -292,7 +315,29 @@ val EnglishAppStrings = AppStrings(
     buyGetQuote = "Buy / Get Quote",
     checkEligibility = "Check Eligibility",
     askAdvisor = "Ask Advisor",
-    chatWithAdvisor = "Chat with Insurance Advisor"
+    chatWithAdvisor = "Chat with Insurance Advisor",
+
+    directionsButton = "Directions",
+    getDirectionsMaps = "Get Directions on Google Maps",
+    aiAssistantTitle = "Nidanmitra AI Helper",
+    aiAssistantSubtitle = "Guided booking in English, हिन्दी & অসমীয়া",
+    aiAssistantFabLabel = "AI Helper",
+    aiAssistantBannerTitle = "Need Help Booking?",
+    aiAssistantBannerDesc = "Speak or type with Nidanmitra AI in English, Hindi, or Assamese (অসমীয়া) to easily find & book doctors, lab tests, or home care.",
+    aiAssistantBannerCta = "Ask AI",
+    aiAssistantInputPlaceholder = "Type or tap mic to speak...",
+    aiAssistantBookAction = "Book Now",
+    aiAssistantNewChat = "New Chat",
+    voiceTapToSpeak = "Tap mic to speak",
+    voiceListeningHint = "Listening... Speak in Assamese, Hindi or English",
+    voiceStopAndSend = "Send Voice",
+    voiceCancel = "Cancel",
+    voiceAutoSpeakOn = "Voice replies ON",
+    voiceAutoSpeakOff = "Voice replies OFF",
+    voiceListenLabel = "Listen",
+    voiceStopSpeakingLabel = "Stop",
+    voiceMessageLabel = "Voice message",
+    voicePermissionDenied = "Microphone permission is needed to use Voice Assistance."
 )
 
 val HindiAppStrings = AppStrings(
@@ -394,7 +439,29 @@ val HindiAppStrings = AppStrings(
     buyGetQuote = "खरीदें / कोट लें",
     checkEligibility = "पात्रता जाँचें",
     askAdvisor = "सलाहकार से पूछें",
-    chatWithAdvisor = "बीमा सलाहकार से चैट करें"
+    chatWithAdvisor = "बीमा सलाहकार से चैट करें",
+
+    directionsButton = "दिशा-निर्देश",
+    getDirectionsMaps = "Google Maps पर रास्ता देखें",
+    aiAssistantTitle = "निदानमित्र AI सहायक",
+    aiAssistantSubtitle = "English, हिन्दी और অসমীয়া में बुकिंग सहायता",
+    aiAssistantFabLabel = "AI सहायक",
+    aiAssistantBannerTitle = "बुकिंग में मदद चाहिए?",
+    aiAssistantBannerDesc = "डॉक्टर, लैब टेस्ट या होम केयर आसानी से बुक करने के लिए हिन्दी, असमिया या अंग्रेज़ी में बोलकर या लिखकर AI से पूछें।",
+    aiAssistantBannerCta = "AI से पूछें",
+    aiAssistantInputPlaceholder = "लिखें या माइक दबाकर बोलें...",
+    aiAssistantBookAction = "अभी बुक करें",
+    aiAssistantNewChat = "नई चैट",
+    voiceTapToSpeak = "बोलने के लिए माइक दबाएँ",
+    voiceListeningHint = "सुन रहा हूँ... असमिया, हिन्दी या अंग्रेज़ी में बोलें",
+    voiceStopAndSend = "भेजें",
+    voiceCancel = "रद्द करें",
+    voiceAutoSpeakOn = "वॉइस उत्तर चालू",
+    voiceAutoSpeakOff = "वॉइस उत्तर बंद",
+    voiceListenLabel = "सुनें",
+    voiceStopSpeakingLabel = "रोकें",
+    voiceMessageLabel = "वॉइस संदेश",
+    voicePermissionDenied = "वॉइस सहायता के लिए माइक्रोफ़ोन अनुमति आवश्यक है।"
 )
 
 val AssameseAppStrings = AppStrings(
@@ -496,7 +563,29 @@ val AssameseAppStrings = AppStrings(
     buyGetQuote = "কিনক / কোট লওক",
     checkEligibility = "যোগ্যতা পৰীক্ষা",
     askAdvisor = "পৰামৰ্শদাতাক সোধক",
-    chatWithAdvisor = "বীমা পৰামৰ্শদাতাৰ সৈতে চ্যাট কৰক"
+    chatWithAdvisor = "বীমা পৰামৰ্শদাতাৰ সৈতে চ্যাট কৰক",
+
+    directionsButton = "দিশা-নিৰ্দেশ",
+    getDirectionsMaps = "Google Maps-ত বাট চাওক",
+    aiAssistantTitle = "নিদানমিত্ৰ AI সহায়ক",
+    aiAssistantSubtitle = "অসমীয়া, हिन्दी আৰু English-ত বুকিং সহায়",
+    aiAssistantFabLabel = "AI সহায়",
+    aiAssistantBannerTitle = "বুকিং কৰাত সহায় লাগে নেকি?",
+    aiAssistantBannerDesc = "নিজে বুক কৰিব নাজানিলে অসমীয়া, হিন্দী বা ইংৰাজীত কৈ বা লিখি নিদানমিত্ৰ AI-ৰ সহায়ত সহজে ডাক্তৰ বা লেব টেষ্ট বুক কৰক।",
+    aiAssistantBannerCta = "AI-ক সোধক",
+    aiAssistantInputPlaceholder = "লিখক বা মাইক টিপি কওক...",
+    aiAssistantBookAction = "এতিয়াই বুক কৰক",
+    aiAssistantNewChat = "নতুন চ্যাট",
+    voiceTapToSpeak = "কথা ক'বলৈ মাইক টিপক",
+    voiceListeningHint = "শুনি আছোঁ... অসমীয়া, হিন্দী বা ইংৰাজীত কওক",
+    voiceStopAndSend = "পঠিয়াওক",
+    voiceCancel = "বাতিল",
+    voiceAutoSpeakOn = "ভইচ উত্তৰ অন",
+    voiceAutoSpeakOff = "ভইচ উত্তৰ অফ",
+    voiceListenLabel = "শুনক",
+    voiceStopSpeakingLabel = "ৰখাওক",
+    voiceMessageLabel = "ভইচ বাৰ্তা",
+    voicePermissionDenied = "ভইচ সহায়তা ব্যৱহাৰ কৰিবলৈ মাইক্ৰ'ফোনৰ অনুমতি প্ৰয়োজন।"
 )
 
 fun stringsForLanguage(language: AppLanguage): AppStrings = when (language) {

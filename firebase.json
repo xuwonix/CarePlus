@@ -1,7 +1,7 @@
 {
   "firestore": [
     {
-      "database": "(default)",
+      "database": "ai-studio-android-carepuls-428c154f-6b45-4df6-a149-027a1477fe0b",
       "rules": "firestore.rules"
     }
   ],

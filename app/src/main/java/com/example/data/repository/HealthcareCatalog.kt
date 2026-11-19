@@ -231,7 +231,9 @@ object HealthcareCatalog {
                 waitTimeMinutes = 12,
                 phone = "+91 3712-220144",
                 accreditation = "NABH Accredited Multi-Specialty Hospital",
-                acceptsCashlessInsurance = true
+                acceptsCashlessInsurance = true,
+                latitude = 26.6476,
+                longitude = 92.7854
             ),
             NearbyFacility(
                 id = "center_1",
@@ -248,7 +250,9 @@ object HealthcareCatalog {
                 waitTimeMinutes = 10,
                 phone = "+91 3712-255410",
                 accreditation = "NABL Accredited Diagnostic Lab",
-                acceptsCashlessInsurance = true
+                acceptsCashlessInsurance = true,
+                latitude = 26.6458,
+                longitude = 92.7885
             ),
             NearbyFacility(
                 id = "hosp_tmch_tezpur",
@@ -265,7 +269,9 @@ object HealthcareCatalog {
                 waitTimeMinutes = 18,
                 phone = "+91 3712-241305",
                 accreditation = "Govt. Tertiary Care & Trauma Center (PM-JAY)",
-                acceptsCashlessInsurance = true
+                acceptsCashlessInsurance = true,
+                latitude = 26.6878,
+                longitude = 92.7166
             ),
             NearbyFacility(
                 id = "center_2",
@@ -282,7 +288,9 @@ object HealthcareCatalog {
                 waitTimeMinutes = 8,
                 phone = "+91 3712-231890",
                 accreditation = "ISO 15189 Certified Diagnostics",
-                acceptsCashlessInsurance = true
+                acceptsCashlessInsurance = true,
+                latitude = 26.6334,
+                longitude = 92.7924
             ),
             // Biswanath Chariali Hospitals & Diagnostic Centres
             NearbyFacility(
@@ -300,7 +308,9 @@ object HealthcareCatalog {
                 waitTimeMinutes = 15,
                 phone = "+91 3715-222048",
                 accreditation = "District Govt. Hospital • PM-JAY & MMAAY Cashless",
-                acceptsCashlessInsurance = true
+                acceptsCashlessInsurance = true,
+                latitude = 26.7279,
+                longitude = 93.1494
             ),
             NearbyFacility(
                 id = "hosp_pragati_biswanath",
@@ -317,7 +327,9 @@ object HealthcareCatalog {
                 waitTimeMinutes = 10,
                 phone = "+91 3715-223910",
                 accreditation = "Multi-Specialty Cashless Network Hospital",
-                acceptsCashlessInsurance = true
+                acceptsCashlessInsurance = true,
+                latitude = 26.7318,
+                longitude = 93.1440
             ),
             NearbyFacility(
                 id = "center_3",
@@ -334,7 +346,9 @@ object HealthcareCatalog {
                 waitTimeMinutes = 9,
                 phone = "+91 3715-224560",
                 accreditation = "NABL Compliant Diagnostics & Imaging",
-                acceptsCashlessInsurance = true
+                acceptsCashlessInsurance = true,
+                latitude = 26.7267,
+                longitude = 93.1483
             ),
             NearbyFacility(
                 id = "center_4",
@@ -351,7 +365,9 @@ object HealthcareCatalog {
                 waitTimeMinutes = 7,
                 phone = "+91 3715-225120",
                 accreditation = "ISO Certified Pathology Lab",
-                acceptsCashlessInsurance = true
+                acceptsCashlessInsurance = true,
+                latitude = 26.7295,
+                longitude = 93.1538
             )
         ).sortedBy { it.distanceKm }
     }
@@ -551,6 +567,8 @@ object HealthcareCatalog {
             providesHomeCollection = true,
             accreditation = "NABL Accredited Lab",
             operatingHours = "06:30 AM - 08:30 PM",
+            latitude = 26.6458,
+            longitude = 92.7885,
             testsOffered = listOf(
                 DiagnosticTest(
                     id = "test_1",
@@ -590,6 +608,8 @@ object HealthcareCatalog {
             providesHomeCollection = true,
             accreditation = "ISO 15189 Certified Lab",
             operatingHours = "06:00 AM - 08:00 PM",
+            latitude = 26.6334,
+            longitude = 92.7924,
             testsOffered = listOf(
                 DiagnosticTest(
                     id = "test_4",
@@ -620,6 +640,8 @@ object HealthcareCatalog {
             providesHomeCollection = true,
             accreditation = "NABL Compliant Diagnostics",
             operatingHours = "06:30 AM - 08:00 PM",
+            latitude = 26.7267,
+            longitude = 93.1483,
             testsOffered = listOf(
                 DiagnosticTest(
                     id = "test_6",
@@ -659,6 +681,8 @@ object HealthcareCatalog {
             providesHomeCollection = true,
             accreditation = "ISO Certified Pathology Lab",
             operatingHours = "06:00 AM - 07:30 PM",
+            latitude = 26.7295,
+            longitude = 93.1538,
             testsOffered = listOf(
                 DiagnosticTest(
                     id = "test_9",
