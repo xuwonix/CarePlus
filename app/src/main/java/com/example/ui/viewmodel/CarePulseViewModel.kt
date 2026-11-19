@@ -1,8 +1,11 @@
 package com.example.ui.viewmodel
 
 import android.app.Application
+import android.content.Context
+import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.google.firebase.firestore.FirebaseFirestoreException
 import com.example.data.model.AmbulanceRequest
 import com.example.data.model.AppNotification
 import com.example.data.model.Appointment
@@ -120,31 +123,87 @@ class CarePulseViewModel(application: Application) : AndroidViewModel(applicatio
     )
     val uiState: StateFlow<HealthcareUiState> = _uiState.asStateFlow()
 
+    private val profileCachePrefs = application.getSharedPreferences("nidanmitra_profile_cache", Context.MODE_PRIVATE)
+
+    private fun cacheProfileLocally(profile: UserProfile) {
+        if (profile.userId.isBlank()) return
+        val p = profile.userId
+        profileCachePrefs.edit()
+            .putBoolean("${p}_has_cache", true)
+            .putString("${p}_email", profile.email)
+            .putString("${p}_displayName", profile.displayName)
+            .putString("${p}_phone", profile.phone)
+            .putString("${p}_age", profile.age)
+            .putString("${p}_gender", profile.gender)
+            .putString("${p}_bloodGroup", profile.bloodGroup)
+            .putString("${p}_allergies", profile.allergies)
+            .putString("${p}_chronicConditions", profile.chronicConditions)
+            .putString("${p}_emergencyContactName", profile.emergencyContactName)
+            .putString("${p}_emergencyContactPhone", profile.emergencyContactPhone)
+            .putString("${p}_locationArea", profile.locationArea)
+            .putString("${p}_savedAddress", profile.savedAddress)
+            .putBoolean("${p}_onboardingCompleted", profile.onboardingCompleted)
+            .apply()
+    }
+
+    private fun loadCachedProfile(uid: String, email: String, displayName: String): UserProfile? {
+        if (uid.isBlank() || !profileCachePrefs.getBoolean("${uid}_has_cache", false)) return null
+        return UserProfile(
+            userId = uid,
+            email = profileCachePrefs.getString("${uid}_email", email).orEmpty().ifBlank { email },
+            displayName = profileCachePrefs.getString("${uid}_displayName", displayName).orEmpty().ifBlank { displayName },
+            phone = profileCachePrefs.getString("${uid}_phone", "").orEmpty(),
+            age = profileCachePrefs.getString("${uid}_age", "").orEmpty(),
+            gender = profileCachePrefs.getString("${uid}_gender", "Prefer not to say").orEmpty(),
+            bloodGroup = profileCachePrefs.getString("${uid}_bloodGroup", "").orEmpty(),
+            allergies = profileCachePrefs.getString("${uid}_allergies", "").orEmpty(),
+            chronicConditions = profileCachePrefs.getString("${uid}_chronicConditions", "").orEmpty(),
+            emergencyContactName = profileCachePrefs.getString("${uid}_emergencyContactName", "").orEmpty(),
+            emergencyContactPhone = profileCachePrefs.getString("${uid}_emergencyContactPhone", "").orEmpty(),
+            locationArea = profileCachePrefs.getString("${uid}_locationArea", "Mission Chariali, Tezpur").orEmpty(),
+            savedAddress = profileCachePrefs.getString("${uid}_savedAddress", "").orEmpty(),
+            onboardingCompleted = profileCachePrefs.getBoolean("${uid}_onboardingCompleted", false)
+        )
+    }
+
+    private fun describeSyncError(e: Exception): String {
+        val fsError = generateSequence<Throwable>(e) { it.cause }
+            .filterIsInstance<FirebaseFirestoreException>()
+            .firstOrNull()
+        return when (fsError?.code) {
+            FirebaseFirestoreException.Code.PERMISSION_DENIED ->
+                "Firestore rules blocked cloud sync. Saved on device—publish firestore.rules in Firebase Console."
+            FirebaseFirestoreException.Code.NOT_FOUND ->
+                "Firestore database not found in Firebase project. Saved on device—create the (default) Firestore database in Firebase Console."
+            else ->
+                "Cloud sync unavailable right now. Changes saved on this device."
+        }
+    }
+
     init {
         initUserData()
     }
 
     private fun initUserData() {
-        repository.getCurrentUser() ?: return
+        val currentUser = repository.getCurrentUser() ?: return
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true) }
             val profile = try {
-                repository.getOrCreateUserProfile()
+                repository.getOrCreateUserProfile().also { cacheProfileLocally(it) }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                val user = repository.getCurrentUser()
-                _uiState.update {
-                    it.copy(
-                        isLoading = false,
-                        feedbackMessage = "Could not sync profile right now. Showing offline profile."
-                    )
-                }
-                UserProfile(
-                    userId = user?.uid ?: "",
-                    email = user?.email ?: "",
-                    displayName = user?.displayName ?: "Nidanmitra Patient",
-                    onboardingCompleted = true
+                Log.w("CarePulseVM", "Initial profile cloud sync failed: ${e.message}", e)
+                val cached = loadCachedProfile(
+                    uid = currentUser.uid,
+                    email = currentUser.email ?: "",
+                    displayName = currentUser.displayName ?: "Nidanmitra Patient"
+                )
+                cached ?: UserProfile(
+                    userId = currentUser.uid,
+                    email = currentUser.email ?: "",
+                    displayName = currentUser.displayName ?: "Nidanmitra Patient",
+                    onboardingCompleted = false
                 )
             }
             val area = profile.locationArea.ifBlank { "Mission Chariali, Tezpur" }
@@ -160,6 +219,7 @@ class CarePulseViewModel(application: Application) : AndroidViewModel(applicatio
             launch {
                 repository.observeUserProfile().collect { updatedProfile ->
                     if (updatedProfile != null) {
+                        cacheProfileLocally(updatedProfile)
                         val updatedArea = updatedProfile.locationArea.ifBlank { "Mission Chariali, Tezpur" }
                         _uiState.update {
                             it.copy(
@@ -269,44 +329,80 @@ class CarePulseViewModel(application: Application) : AndroidViewModel(applicatio
     }
 
     fun updatePatientProfile(profile: UserProfile) {
+        val currentUser = repository.getCurrentUser()
+        val updatedLocal = profile.copy(
+            userId = profile.userId.ifBlank { currentUser?.uid ?: "" },
+            email = profile.email.ifBlank { currentUser?.email ?: "" },
+            onboardingCompleted = true
+        )
+        val area = updatedLocal.locationArea.ifBlank { "Mission Chariali, Tezpur" }
+        cacheProfileLocally(updatedLocal)
+        _uiState.update {
+            it.copy(
+                userProfile = updatedLocal,
+                selectedLocationArea = area,
+                nearbyFacilities = HealthcareCatalog.getNearbyHospitalsAndCenters(area)
+            )
+        }
         viewModelScope.launch {
             try {
-                repository.updateUserProfile(profile)
+                repository.updateUserProfile(updatedLocal)
                 _uiState.update { it.copy(feedbackMessage = "Patient profile updated") }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
-                _uiState.update { it.copy(feedbackMessage = "Profile update failed: ${e.message}") }
+                Log.w("CarePulseVM", "Profile cloud update failed: ${e.message}", e)
+                _uiState.update { it.copy(feedbackMessage = describeSyncError(e)) }
             }
         }
     }
 
     fun skipOnboarding() {
+        val updatedLocal = (_uiState.value.userProfile ?: UserProfile(
+            userId = repository.getCurrentUser()?.uid ?: "",
+            email = repository.getCurrentUser()?.email ?: "",
+            displayName = repository.getCurrentUser()?.displayName ?: "Nidanmitra Patient"
+        )).copy(onboardingCompleted = true)
+        cacheProfileLocally(updatedLocal)
+        _uiState.update { it.copy(userProfile = updatedLocal) }
         viewModelScope.launch {
             try {
                 repository.skipOnboarding()
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
+                Log.w("CarePulseVM", "Skip onboarding cloud sync failed: ${e.message}", e)
                 _uiState.update {
-                    it.copy(
-                        userProfile = it.userProfile?.copy(onboardingCompleted = true),
-                        feedbackMessage = "You can complete your health profile anytime in Profile."
-                    )
+                    it.copy(feedbackMessage = "You can complete your health profile anytime in Profile.")
                 }
             }
         }
     }
 
     fun updateLocation(area: String, address: String) {
+        val updatedProfile = _uiState.value.userProfile?.copy(
+            locationArea = area,
+            savedAddress = address
+        )
+        if (updatedProfile != null) {
+            cacheProfileLocally(updatedProfile)
+        }
+        _uiState.update {
+            it.copy(
+                userProfile = updatedProfile ?: it.userProfile,
+                selectedLocationArea = area,
+                nearbyFacilities = HealthcareCatalog.getNearbyHospitalsAndCenters(area)
+            )
+        }
         viewModelScope.launch {
             try {
-                _uiState.update {
-                    it.copy(
-                        selectedLocationArea = area,
-                        nearbyFacilities = HealthcareCatalog.getNearbyHospitalsAndCenters(area)
-                    )
-                }
                 repository.updateLocation(area, address)
                 _uiState.update { it.copy(feedbackMessage = "Location set to $area") }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
-                _uiState.update { it.copy(feedbackMessage = "Location update failed: ${e.message}") }
+                Log.w("CarePulseVM", "Location cloud sync failed: ${e.message}", e)
+                _uiState.update { it.copy(feedbackMessage = "Location set to $area") }
             }
         }
     }

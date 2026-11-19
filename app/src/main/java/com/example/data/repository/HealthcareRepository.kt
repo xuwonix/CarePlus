@@ -28,6 +28,7 @@ import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.FirebaseFirestoreException
 import com.google.firebase.firestore.QuerySnapshot
+import com.google.firebase.firestore.SetOptions
 import com.google.firebase.firestore.snapshots
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
@@ -153,8 +154,12 @@ class HealthcareRepository(private val db: FirebaseFirestore) {
 
     suspend fun updateUserProfile(profile: UserProfile) {
         val uid = requireUserId()
-        db.collection("users").document(uid).update(
+        val email = profile.email.ifBlank { auth.currentUser?.email ?: "" }
+        db.collection("users").document(uid).set(
             mapOf(
+                "userId" to uid,
+                "email" to email,
+                "role" to UserRole.PATIENT.name,
                 "displayName" to profile.displayName,
                 "phone" to profile.phone,
                 "age" to profile.age,
@@ -168,28 +173,36 @@ class HealthcareRepository(private val db: FirebaseFirestore) {
                 "locationArea" to profile.locationArea,
                 "onboardingCompleted" to true,
                 "updatedAt" to FieldValue.serverTimestamp()
-            )
+            ),
+            SetOptions.merge()
         ).await()
     }
 
     suspend fun skipOnboarding() {
         val uid = requireUserId()
-        db.collection("users").document(uid).update(
+        db.collection("users").document(uid).set(
             mapOf(
+                "userId" to uid,
+                "email" to (auth.currentUser?.email ?: ""),
+                "displayName" to (auth.currentUser?.displayName ?: "Nidanmitra Patient"),
+                "role" to UserRole.PATIENT.name,
                 "onboardingCompleted" to true,
                 "updatedAt" to FieldValue.serverTimestamp()
-            )
+            ),
+            SetOptions.merge()
         ).await()
     }
 
     suspend fun updateLocation(area: String, address: String) {
         val uid = requireUserId()
-        db.collection("users").document(uid).update(
+        db.collection("users").document(uid).set(
             mapOf(
+                "userId" to uid,
                 "locationArea" to area,
                 "savedAddress" to address,
                 "updatedAt" to FieldValue.serverTimestamp()
-            )
+            ),
+            SetOptions.merge()
         ).await()
     }
 
@@ -212,11 +225,13 @@ class HealthcareRepository(private val db: FirebaseFirestore) {
 
     suspend fun saveUserInsurancePolicies(policies: List<UserInsurancePolicy>) {
         val uid = requireUserId()
-        db.collection("users").document(uid).update(
+        db.collection("users").document(uid).set(
             mapOf(
+                "userId" to uid,
                 "insurancePolicies" to policies.map { it.toFirestoreMap() },
                 "updatedAt" to FieldValue.serverTimestamp()
-            )
+            ),
+            SetOptions.merge()
         ).await()
     }
 

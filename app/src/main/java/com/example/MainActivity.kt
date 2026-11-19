@@ -22,10 +22,12 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Emergency
 import androidx.compose.material.icons.filled.FolderShared
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.LocalHospital
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Person
@@ -75,6 +77,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.credentials.CredentialManager
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -122,6 +125,7 @@ import com.example.ui.screens.procedures.ProcedureDetailScreen
 import com.example.ui.theme.CarePulseTheme
 import com.example.ui.theme.EmergencyRed
 import com.example.ui.theme.EmergencyRedContainer
+import com.example.ui.theme.ThemePreferences
 import com.example.ui.i18n.AppLanguage
 import com.example.ui.i18n.LanguagePreferences
 import com.example.ui.i18n.LanguageSelectorButton
@@ -146,9 +150,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
-            CarePulseTheme {
-                CarePulseRootApp()
-            }
+            CarePulseRootApp()
         }
     }
 }
@@ -158,10 +160,17 @@ fun CarePulseRootApp() {
     val context = LocalContext.current
     var currentUser by remember { mutableStateOf(Firebase.auth.currentUser) }
     var selectedLanguage by remember { mutableStateOf(LanguagePreferences.load(context)) }
+    var darkModeOverride by remember { mutableStateOf(ThemePreferences.loadOverride(context)) }
+    val isDarkMode = darkModeOverride ?: false
 
     val onSelectLanguage: (AppLanguage) -> Unit = { lang ->
         selectedLanguage = lang
         LanguagePreferences.save(context, lang)
+    }
+
+    val onToggleDarkMode: (Boolean) -> Unit = { enabled ->
+        darkModeOverride = enabled
+        ThemePreferences.saveOverride(context, enabled)
     }
 
     DisposableEffect(Unit) {
@@ -174,30 +183,36 @@ fun CarePulseRootApp() {
         }
     }
 
-    CompositionLocalProvider(
-        LocalAppLanguage provides selectedLanguage,
-        LocalAppStrings provides stringsForLanguage(selectedLanguage)
-    ) {
-        if (currentUser == null) {
-            AuthScreen(
-                selectedLanguage = selectedLanguage,
-                onSelectLanguage = onSelectLanguage,
-                onAuthSuccess = {
-                    currentUser = Firebase.auth.currentUser
-                }
-            )
-        } else {
-            val uid = currentUser!!.uid
-            key(uid) {
-                val viewModel: CarePulseViewModel = viewModel(key = uid)
-                PatientMainApp(
-                    viewModel = viewModel,
+    CarePulseTheme(darkTheme = isDarkMode) {
+        CompositionLocalProvider(
+            LocalAppLanguage provides selectedLanguage,
+            LocalAppStrings provides stringsForLanguage(selectedLanguage)
+        ) {
+            if (currentUser == null) {
+                AuthScreen(
                     selectedLanguage = selectedLanguage,
                     onSelectLanguage = onSelectLanguage,
-                    onSignOutRequested = {
-                        currentUser = null
+                    isDarkMode = isDarkMode,
+                    onToggleDarkMode = onToggleDarkMode,
+                    onAuthSuccess = {
+                        currentUser = Firebase.auth.currentUser
                     }
                 )
+            } else {
+                val uid = currentUser!!.uid
+                key(uid) {
+                    val viewModel: CarePulseViewModel = viewModel(key = uid)
+                    PatientMainApp(
+                        viewModel = viewModel,
+                        selectedLanguage = selectedLanguage,
+                        onSelectLanguage = onSelectLanguage,
+                        isDarkMode = isDarkMode,
+                        onToggleDarkMode = onToggleDarkMode,
+                        onSignOutRequested = {
+                            currentUser = null
+                        }
+                    )
+                }
             }
         }
     }
@@ -209,6 +224,8 @@ fun PatientMainApp(
     viewModel: CarePulseViewModel,
     selectedLanguage: AppLanguage,
     onSelectLanguage: (AppLanguage) -> Unit,
+    isDarkMode: Boolean,
+    onToggleDarkMode: (Boolean) -> Unit,
     onSignOutRequested: () -> Unit
 ) {
     val context = LocalContext.current
@@ -444,15 +461,20 @@ fun PatientMainApp(
                                     ) {
                                         Text(
                                             text = strings.appName,
-                                            style = MaterialTheme.typography.titleLarge,
+                                            style = MaterialTheme.typography.titleMedium,
                                             fontWeight = FontWeight.ExtraBold,
-                                            color = MaterialTheme.colorScheme.primary
+                                            color = MaterialTheme.colorScheme.primary,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
                                         )
                                         Row(verticalAlignment = Alignment.CenterVertically) {
                                             Text(
                                                 text = uiState.selectedLocationArea,
                                                 style = MaterialTheme.typography.labelSmall,
-                                                color = MaterialTheme.colorScheme.secondary
+                                                color = MaterialTheme.colorScheme.secondary,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis,
+                                                modifier = Modifier.weight(1f, fill = false)
                                             )
                                             Icon(
                                                 imageVector = Icons.Default.KeyboardArrowDown,
@@ -465,6 +487,26 @@ fun PatientMainApp(
                                 }
                             },
                             actions = {
+                                IconButton(
+                                    onClick = {
+                                        val next = !isDarkMode
+                                        onToggleDarkMode(next)
+                                        coroutineScope.launch {
+                                            snackbarHostState.showSnackbar(
+                                                strings.themeChangedToast(next)
+                                            )
+                                        }
+                                    },
+                                    modifier = Modifier
+                                        .minimumInteractiveComponentSize()
+                                        .testTag("top_bar_dark_mode_toggle")
+                                ) {
+                                    Icon(
+                                        imageVector = if (isDarkMode) Icons.Default.LightMode else Icons.Default.DarkMode,
+                                        contentDescription = if (isDarkMode) strings.switchToLightMode else strings.switchToDarkMode,
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                }
                                 LanguageSelectorButton(
                                     selectedLanguage = selectedLanguage,
                                     onSelectLanguage = { lang ->
@@ -641,6 +683,8 @@ fun PatientMainApp(
                                         userPolicies = uiState.userInsurancePolicies,
                                         tiedUpInsurerCount = uiState.insurancePartners.size,
                                         claims = uiState.patientInsuranceClaims,
+                                        isDarkMode = isDarkMode,
+                                        onToggleDarkMode = onToggleDarkMode,
                                         onEditProfile = { showEditProfileModal = true },
                                         onOpenLocationPicker = { showLocationPickerModal = true },
                                         onAddFamilyMember = { showAddFamilyMemberModal = true },

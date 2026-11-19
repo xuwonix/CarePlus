@@ -62,6 +62,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.data.model.Review
 import com.example.data.model.Specialist
+import com.example.ui.i18n.LocalAppStrings
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -76,6 +77,7 @@ fun DoctorProfileScreen(
     onBack: () -> Unit
 ) {
     BackHandler { onBack() }
+    val strings = LocalAppStrings.current
 
     var showWriteReviewDialog by remember { mutableStateOf(false) }
     val doctorReviews = remember(reviews, specialist.id) {
@@ -240,7 +242,7 @@ fun DoctorProfileScreen(
                             )
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
-                                text = if (isBooked) "Message" else "Booked Only",
+                                text = strings.chatAction,
                                 fontWeight = FontWeight.SemiBold,
                                 maxLines = 1,
                                 color = if (isBooked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant

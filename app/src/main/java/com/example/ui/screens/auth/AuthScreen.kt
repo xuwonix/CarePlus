@@ -23,7 +23,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Biotech
+import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Emergency
+import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.LocalHospital
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.MedicalServices
@@ -35,9 +37,11 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -85,6 +89,8 @@ import kotlinx.coroutines.withContext
 fun AuthScreen(
     selectedLanguage: AppLanguage = LocalAppLanguage.current,
     onSelectLanguage: (AppLanguage) -> Unit = {},
+    isDarkMode: Boolean = false,
+    onToggleDarkMode: (Boolean) -> Unit = {},
     onAuthSuccess: () -> Unit
 ) {
     val context = LocalContext.current
@@ -276,14 +282,31 @@ fun AuthScreen(
             Spacer(modifier = Modifier.height(32.dp))
             }
 
-            LanguageSelectorButton(
-                selectedLanguage = selectedLanguage,
-                onSelectLanguage = onSelectLanguage,
+            Row(
                 modifier = Modifier
                     .align(Alignment.TopEnd)
                     .statusBarsPadding()
-                    .padding(horizontal = 16.dp, vertical = 10.dp)
-            )
+                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                IconButton(
+                    onClick = { onToggleDarkMode(!isDarkMode) },
+                    modifier = Modifier
+                        .minimumInteractiveComponentSize()
+                        .testTag("auth_dark_mode_toggle")
+                ) {
+                    Icon(
+                        imageVector = if (isDarkMode) Icons.Default.LightMode else Icons.Default.DarkMode,
+                        contentDescription = if (isDarkMode) strings.switchToLightMode else strings.switchToDarkMode,
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                }
+                LanguageSelectorButton(
+                    selectedLanguage = selectedLanguage,
+                    onSelectLanguage = onSelectLanguage
+                )
+            }
         }
     }
 }

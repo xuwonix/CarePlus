@@ -83,6 +83,11 @@ data class AppStrings(
     val navProfile: String,
     val notificationsLabel: String,
     val languageLabel: String,
+    val darkModeLabel: String,
+    val darkModeSubtitle: String,
+    val switchToDarkMode: String,
+    val switchToLightMode: String,
+    val themeChangedToast: (Boolean) -> String,
 
     // Home Tab
     val helloPrefix: String,
@@ -204,6 +209,11 @@ val EnglishAppStrings = AppStrings(
     navProfile = "Profile",
     notificationsLabel = "Notifications",
     languageLabel = "Change Language",
+    darkModeLabel = "Dark Mode",
+    darkModeSubtitle = "Comfortable low-light view for night hours",
+    switchToDarkMode = "Switch to Dark Mode",
+    switchToLightMode = "Switch to Light Mode",
+    themeChangedToast = { isDark -> if (isDark) "Dark Mode enabled" else "Light Mode enabled" },
 
     helloPrefix = "Hello",
     homeSubtitle = "Doctors, labs, home care & hospitals",
@@ -301,6 +311,11 @@ val HindiAppStrings = AppStrings(
     navProfile = "प्रोफ़ाइल",
     notificationsLabel = "सूचनाएँ",
     languageLabel = "भाषा बदलें",
+    darkModeLabel = "डार्क मोड",
+    darkModeSubtitle = "रात में आँखों के आराम के लिए डार्क थीम",
+    switchToDarkMode = "डार्क मोड चालू करें",
+    switchToLightMode = "लाइट मोड चालू करें",
+    themeChangedToast = { isDark -> if (isDark) "डार्क मोड चालू हो गया" else "लाइट मोड चालू हो गया" },
 
     helloPrefix = "नमस्ते",
     homeSubtitle = "डॉक्टर, लैब टेस्ट, होम केयर और अस्पताल",
@@ -398,6 +413,11 @@ val AssameseAppStrings = AppStrings(
     navProfile = "প্ৰফাইল",
     notificationsLabel = "জাননী",
     languageLabel = "ভাষা সলনি কৰক",
+    darkModeLabel = "ডাৰ্ক ম'ড",
+    darkModeSubtitle = "ৰাতি ব্যৱহাৰৰ বাবে চকুৰ আৰামদায়ক থীম",
+    switchToDarkMode = "ডাৰ্ক ম'ড অন কৰক",
+    switchToLightMode = "লাইট ম'ড অন কৰক",
+    themeChangedToast = { isDark -> if (isDark) "ডাৰ্ক ম'ড অন কৰা হ'ল" else "লাইট ম'ড অন কৰা হ'ল" },
 
     helloPrefix = "নমস্কাৰ",
     homeSubtitle = "ডাক্তৰ, লেব টেষ্ট, হোম কেয়াৰ আৰু হাস্পতাল",

@@ -195,3 +195,146 @@ test("Medical records: scanned prescription record create and owner query succee
   );
   await assertFails(bobDb.collection("medical_records").doc("rec_1").get());
 });
+
+test("Bookings (appointments, diagnostics, home care, ambulance) and payments succeed for owner and block cross-user access", async () => {
+  const aliceDb = testEnv.authenticatedContext(ALICE_UID).firestore();
+  const bobDb = testEnv.authenticatedContext(BOB_UID).firestore();
+  const now = new Date(Date.now() - 1000);
+
+  // 1. Doctor Appointment create + query + reschedule + cancel
+  await assertSucceeds(
+    aliceDb.collection("appointments").doc("appt_1").set({
+      patientId: ALICE_UID,
+      patientName: "Alice Borah",
+      familyMemberName: "Self",
+      specialistId: "doc_cardio_1",
+      specialistName: "Dr. Ananya Baruah",
+      specialty: "Cardiology",
+      clinicHospital: "Tezpur Medical College",
+      date: "20 Nov 2026",
+      timeSlot: "10:30 AM",
+      mode: "In-Person",
+      status: "SCHEDULED",
+      notes: "Routine checkup",
+      prescription: "",
+      consultationFee: 500.0,
+      paymentStatus: "PAID",
+      paymentMethod: "UPI / Card",
+      createdAt: now,
+      updatedAt: now,
+    })
+  );
+  await assertSucceeds(
+    aliceDb.collection("appointments").where("patientId", "==", ALICE_UID).get()
+  );
+  await assertSucceeds(
+    aliceDb.collection("appointments").doc("appt_1").update({
+      date: "21 Nov 2026",
+      timeSlot: "11:00 AM",
+      status: "SCHEDULED",
+      updatedAt: new Date(Date.now() - 500),
+    })
+  );
+  await assertFails(bobDb.collection("appointments").doc("appt_1").get());
+
+  // 2. Payment record created alongside booking
+  await assertSucceeds(
+    aliceDb.collection("payments").doc("pay_1").set({
+      patientId: ALICE_UID,
+      title: "Consultation: Dr. Ananya Baruah",
+      providerName: "Tezpur Medical College",
+      category: "APPOINTMENT",
+      billingForName: "Self",
+      amount: 500.0,
+      paymentMethod: "UPI / Card",
+      status: "PAID",
+      transactionRef: "TXN-123456",
+      createdAt: now,
+    })
+  );
+  await assertSucceeds(
+    aliceDb.collection("payments").where("patientId", "==", ALICE_UID).get()
+  );
+  await assertFails(bobDb.collection("payments").doc("pay_1").get());
+
+  // 3. Diagnostic booking create + query + cancel
+  await assertSucceeds(
+    aliceDb.collection("diagnostic_bookings").doc("diag_1").set({
+      patientId: ALICE_UID,
+      patientName: "Alice Borah",
+      familyMemberName: "Self",
+      centerId: "lab_1",
+      centerName: "Tezpur Diagnostics",
+      testId: "test_cbc",
+      testName: "Complete Blood Count",
+      testCategory: "Blood",
+      scheduledDate: "20 Nov 2026",
+      scheduledTime: "08:00 AM",
+      collectionType: "HOME_COLLECTION",
+      collectionAddress: "Mission Chariali, Tezpur",
+      status: "BOOKED",
+      resultSummary: "Phlebotomist assigned",
+      abnormalFlag: false,
+      cost: 350.0,
+      paymentStatus: "PAID",
+      paymentMethod: "UPI / Card",
+      createdAt: now,
+      updatedAt: now,
+    })
+  );
+  await assertSucceeds(
+    aliceDb.collection("diagnostic_bookings").where("patientId", "==", ALICE_UID).get()
+  );
+  await assertFails(bobDb.collection("diagnostic_bookings").doc("diag_1").get());
+
+  // 4. Home care booking create + query
+  await assertSucceeds(
+    aliceDb.collection("home_care_bookings").doc("hc_1").set({
+      patientId: ALICE_UID,
+      patientName: "Alice Borah",
+      memberName: "Self",
+      serviceId: "hc_nurse",
+      serviceTitle: "Home Nursing Visit",
+      serviceCategory: "Nursing",
+      providerTeam: "Nidanmitra Home Care",
+      visitAddress: "Mission Chariali, Tezpur",
+      scheduledDate: "20 Nov 2026",
+      timeWindow: "09:00 AM - 11:00 AM",
+      notes: "",
+      status: "SCHEDULED",
+      cost: 800.0,
+      paymentStatus: "PAID",
+      createdAt: now,
+      updatedAt: now,
+    })
+  );
+  await assertSucceeds(
+    aliceDb.collection("home_care_bookings").where("patientId", "==", ALICE_UID).get()
+  );
+  await assertFails(bobDb.collection("home_care_bookings").doc("hc_1").get());
+
+  // 5. Ambulance dispatch create + query
+  await assertSucceeds(
+    aliceDb.collection("ambulance_requests").doc("amb_1").set({
+      patientId: ALICE_UID,
+      patientName: "Alice Borah",
+      patientPhone: "+91 9876543210",
+      pickupAddress: "Biswanath Chariali",
+      emergencyType: "Cardiac",
+      ambulanceType: "ADVANCED_CARDIAC",
+      status: "DISPATCHED",
+      vehicleNumber: "AS-32-EM-1234",
+      driverName: "Biswanath 108 EMS Team",
+      driverPhone: "+91 3715-108-220",
+      etaMinutes: 7,
+      hospitalDestination: "Biswanath Chariali Civil Hospital",
+      createdAt: now,
+      updatedAt: now,
+    })
+  );
+  await assertSucceeds(
+    aliceDb.collection("ambulance_requests").where("patientId", "==", ALICE_UID).get()
+  );
+  await assertFails(bobDb.collection("ambulance_requests").doc("amb_1").get());
+});
+

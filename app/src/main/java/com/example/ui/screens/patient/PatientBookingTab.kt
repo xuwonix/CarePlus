@@ -334,7 +334,7 @@ private fun BookingSpecialistCard(
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
-                        text = if (isBooked) strings.chatAction else strings.bookedOnly,
+                        text = strings.chatAction,
                         maxLines = 1,
                         style = MaterialTheme.typography.labelMedium,
                         color = if (isBooked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
