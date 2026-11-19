@@ -1,10 +1,12 @@
 package com.example.data.model
 
+import androidx.annotation.Keep
 import com.google.firebase.Timestamp
 import com.google.firebase.firestore.DocumentId
 import com.google.firebase.firestore.IgnoreExtraProperties
 import com.google.firebase.firestore.ServerTimestamp
 
+@Keep
 @IgnoreExtraProperties
 data class UserProfile(
     @DocumentId val id: String = "",
@@ -23,6 +25,7 @@ data class UserProfile(
     val locationArea: String = "Mission Chariali, Tezpur",
     val savedAddress: String = "",
     val onboardingCompleted: Boolean = false,
+    val insurancePolicies: List<UserInsurancePolicy> = emptyList(),
     @ServerTimestamp val createdAt: Timestamp? = null,
     @ServerTimestamp val updatedAt: Timestamp? = null
 )

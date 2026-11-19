@@ -18,34 +18,75 @@ import com.example.data.model.MedicalRecord
 import com.example.data.model.PaymentRecord
 import com.example.data.model.Review
 import com.example.data.model.SupportTicket
+import com.example.data.model.UserInsurancePolicy
 import com.example.data.model.UserProfile
 import com.example.data.model.UserRole
 import com.google.firebase.Firebase
 import com.google.firebase.auth.auth
+import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
-import com.google.firebase.firestore.Query
+import com.google.firebase.firestore.FirebaseFirestoreException
+import com.google.firebase.firestore.QuerySnapshot
 import com.google.firebase.firestore.snapshots
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.tasks.await
 
 class HealthcareRepository(private val db: FirebaseFirestore) {
 
+    companion object {
+        const val SUPPORT_DESK_CONSULTATION_ID = "support_care_desk"
+        const val SUPPORT_DESK_RECIPIENT_ID = "support_care_desk"
+        const val SUPPORT_DESK_RECIPIENT_NAME = "Nidanmitra Care Coordinator"
+        const val INSURANCE_DESK_CONSULTATION_ID = "insurance_assistance_desk"
+        const val INSURANCE_DESK_RECIPIENT_ID = "insurance_assistance_desk"
+        const val INSURANCE_DESK_RECIPIENT_NAME = "Nidanmitra Insurance Assistance"
+    }
+
     constructor(context: Context) : this(
-        FirebaseFirestore.getInstance(
-            context.applicationContext.getString(R.string.firestore_database_id)
-        )
+        context.applicationContext.getString(R.string.firestore_database_id).let { dbId ->
+            if (dbId.isBlank() || dbId == "(default)") {
+                FirebaseFirestore.getInstance()
+            } else {
+                FirebaseFirestore.getInstance(dbId)
+            }
+        }
     )
 
     private val auth = Firebase.auth
 
+    private fun <T> QuerySnapshot.toEstimatedObjects(clazz: Class<T>): List<T> {
+        return documents.mapNotNull { doc ->
+            try {
+                doc.toObject(clazz, DocumentSnapshot.ServerTimestampBehavior.ESTIMATE)
+            } catch (e: Exception) {
+                Log.w("HealthcareRepo", "Skipped malformed doc ${doc.id}: ${e.message}")
+                null
+            }
+        }
+    }
+
+    private fun handleStreamError(error: Throwable, label: String) {
+        val firestoreError = generateSequence(error) { it.cause }
+            .filterIsInstance<FirebaseFirestoreException>()
+            .firstOrNull()
+        if (firestoreError != null) {
+            Log.w("HealthcareRepo", "Firestore stream error ($label) [${firestoreError.code}]: ${firestoreError.message}")
+        } else if (error is CancellationException) {
+            throw error
+        } else {
+            Log.w("HealthcareRepo", "Error observing $label: ${error.message}")
+        }
+    }
+
     fun requireUserId(): String {
         return auth.currentUser?.uid
-            ?: throw IllegalStateException("User must be signed in with Google before accessing Nidanmita data.")
+            ?: throw IllegalStateException("User must be signed in with Google before accessing Nidanmitra data.")
     }
 
     fun getCurrentUser() = auth.currentUser
@@ -61,14 +102,14 @@ class HealthcareRepository(private val db: FirebaseFirestore) {
             return snapshot.toObject(UserProfile::class.java) ?: UserProfile(
                 userId = uid,
                 email = auth.currentUser?.email ?: "",
-                displayName = auth.currentUser?.displayName ?: "Nidanmita Patient",
+                displayName = auth.currentUser?.displayName ?: "Nidanmitra Patient",
                 role = UserRole.PATIENT.name
             )
         } else {
             val profile = UserProfile(
                 userId = uid,
                 email = auth.currentUser?.email ?: "",
-                displayName = auth.currentUser?.displayName ?: "Nidanmita Patient",
+                displayName = auth.currentUser?.displayName ?: "Nidanmitra Patient",
                 role = UserRole.PATIENT.name,
                 onboardingCompleted = false
             )
@@ -89,6 +130,7 @@ class HealthcareRepository(private val db: FirebaseFirestore) {
                     "locationArea" to profile.locationArea,
                     "savedAddress" to profile.savedAddress,
                     "onboardingCompleted" to false,
+                    "insurancePolicies" to emptyList<Map<String, Any>>(),
                     "createdAt" to FieldValue.serverTimestamp(),
                     "updatedAt" to FieldValue.serverTimestamp()
                 )
@@ -101,9 +143,9 @@ class HealthcareRepository(private val db: FirebaseFirestore) {
         val uid = requireUserId()
         db.collection("users").document(uid)
             .snapshots()
-            .map { it.toObject(UserProfile::class.java) }
+            .map { it.toObject(UserProfile::class.java, DocumentSnapshot.ServerTimestampBehavior.ESTIMATE) }
             .catch { error ->
-                Log.w("HealthcareRepo", "Error observing profile: ${error.message}")
+                handleStreamError(error, "profile")
                 emit(null)
             }
             .collect { emit(it) }
@@ -152,6 +194,69 @@ class HealthcareRepository(private val db: FirebaseFirestore) {
     }
 
     // -------------------------------------------------------------
+    // CONSUMER-ADDED INSURANCE POLICIES (stored on users/{uid})
+    // -------------------------------------------------------------
+    private fun UserInsurancePolicy.toFirestoreMap(): Map<String, Any> = mapOf(
+        "id" to id,
+        "insurerName" to insurerName,
+        "planName" to planName,
+        "policyNumber" to policyNumber,
+        "policyType" to policyType,
+        "sumInsured" to sumInsured,
+        "validUntil" to validUntil,
+        "coveredMembers" to coveredMembers,
+        "cardAttachmentPath" to cardAttachmentPath,
+        "cardAttachmentName" to cardAttachmentName,
+        "cardFileType" to cardFileType
+    )
+
+    suspend fun saveUserInsurancePolicies(policies: List<UserInsurancePolicy>) {
+        val uid = requireUserId()
+        db.collection("users").document(uid).update(
+            mapOf(
+                "insurancePolicies" to policies.map { it.toFirestoreMap() },
+                "updatedAt" to FieldValue.serverTimestamp()
+            )
+        ).await()
+    }
+
+    suspend fun submitInsuranceInquiry(
+        partnerName: String,
+        planName: String,
+        inquiryType: String,
+        coverageAmount: String,
+        membersInfo: String,
+        preferredPhone: String,
+        notes: String
+    ) {
+        val uid = requireUserId()
+        val subject = "$inquiryType: $partnerName${if (planName.isNotBlank()) " ($planName)" else ""}"
+        val details = buildString {
+            append("Insurer: $partnerName")
+            if (planName.isNotBlank()) append(" • Plan: $planName")
+            if (coverageAmount.isNotBlank()) append(" • Cover: $coverageAmount")
+            if (membersInfo.isNotBlank()) append(" • Members: $membersInfo")
+            if (preferredPhone.isNotBlank()) append(" • Callback: $preferredPhone")
+            if (notes.isNotBlank()) append("\nNotes: $notes")
+        }
+        db.collection("support_tickets").document().set(
+            mapOf(
+                "patientId" to uid,
+                "category" to "Insurance $inquiryType",
+                "subject" to subject,
+                "description" to details,
+                "status" to "OPEN",
+                "createdAt" to FieldValue.serverTimestamp()
+            )
+        ).await()
+        createNotification(
+            title = "Insurance Request Received",
+            message = "Nidanmitra Insurance Desk received your $inquiryType request for $partnerName. An advisor will contact you shortly.",
+            category = "PAYMENT"
+        )
+    }
+
+    // -------------------------------------------------------------
     // FAMILY PROFILES
     // -------------------------------------------------------------
     fun observeFamilyMembers(): Flow<List<FamilyMember>> = flow {
@@ -159,10 +264,9 @@ class HealthcareRepository(private val db: FirebaseFirestore) {
         db.collection("family_profiles")
             .whereEqualTo("patientId", uid)
             .snapshots()
-            .map { it.toObjects(FamilyMember::class.java) }
+            .map { it.toEstimatedObjects(FamilyMember::class.java) }
             .catch { error ->
-                if (error is CancellationException) throw error
-                Log.w("HealthcareRepo", "Error observing family members: ${error.message}")
+                handleStreamError(error, "family members")
                 emit(emptyList())
             }
             .collect { emit(it) }
@@ -199,10 +303,12 @@ class HealthcareRepository(private val db: FirebaseFirestore) {
         db.collection("appointments")
             .whereEqualTo("patientId", uid)
             .snapshots()
-            .map { it.toObjects(Appointment::class.java) }
+            .map { snap ->
+                snap.toEstimatedObjects(Appointment::class.java)
+                    .sortedByDescending { it.createdAt?.seconds ?: 0L }
+            }
             .catch { error ->
-                if (error is CancellationException) throw error
-                Log.w("HealthcareRepo", "Error observing appointments: ${error.message}")
+                handleStreamError(error, "appointments")
                 emit(emptyList())
             }
             .collect { emit(it) }
@@ -290,10 +396,12 @@ class HealthcareRepository(private val db: FirebaseFirestore) {
         db.collection("diagnostic_bookings")
             .whereEqualTo("patientId", uid)
             .snapshots()
-            .map { it.toObjects(DiagnosticBooking::class.java) }
+            .map { snap ->
+                snap.toEstimatedObjects(DiagnosticBooking::class.java)
+                    .sortedByDescending { it.createdAt?.seconds ?: 0L }
+            }
             .catch { error ->
-                if (error is CancellationException) throw error
-                Log.w("HealthcareRepo", "Error observing diagnostic bookings: ${error.message}")
+                handleStreamError(error, "diagnostic bookings")
                 emit(emptyList())
             }
             .collect { emit(it) }
@@ -400,10 +508,12 @@ class HealthcareRepository(private val db: FirebaseFirestore) {
         db.collection("home_care_bookings")
             .whereEqualTo("patientId", uid)
             .snapshots()
-            .map { it.toObjects(HomeCareBooking::class.java) }
+            .map { snap ->
+                snap.toEstimatedObjects(HomeCareBooking::class.java)
+                    .sortedByDescending { it.createdAt?.seconds ?: 0L }
+            }
             .catch { error ->
-                if (error is CancellationException) throw error
-                Log.w("HealthcareRepo", "Error observing home care bookings: ${error.message}")
+                handleStreamError(error, "home care bookings")
                 emit(emptyList())
             }
             .collect { emit(it) }
@@ -492,10 +602,12 @@ class HealthcareRepository(private val db: FirebaseFirestore) {
         db.collection("ambulance_requests")
             .whereEqualTo("patientId", uid)
             .snapshots()
-            .map { it.toObjects(AmbulanceRequest::class.java) }
+            .map { snap ->
+                snap.toEstimatedObjects(AmbulanceRequest::class.java)
+                    .sortedByDescending { it.createdAt?.seconds ?: 0L }
+            }
             .catch { error ->
-                if (error is CancellationException) throw error
-                Log.w("HealthcareRepo", "Error observing ambulance requests: ${error.message}")
+                handleStreamError(error, "ambulance requests")
                 emit(emptyList())
             }
             .collect { emit(it) }
@@ -509,7 +621,19 @@ class HealthcareRepository(private val db: FirebaseFirestore) {
     ): String {
         val uid = requireUserId()
         val docRef = db.collection("ambulance_requests").document()
-        val vehicleNo = "AS-12-EM-${(1000..9999).random()}"
+        val isBiswanath = HealthcareCatalog.isBiswanathArea(pickupAddress)
+        val vehicleNo = if (isBiswanath) {
+            "AS-32-EM-${(1000..9999).random()}"
+        } else {
+            "AS-12-EM-${(1000..9999).random()}"
+        }
+        val teamName = if (isBiswanath) "Biswanath 108 EMS Team" else "Tezpur 108 EMS Team"
+        val driverPhone = if (isBiswanath) "+91 3715-108-220" else "+91 3712-108-420"
+        val destinationHospital = if (isBiswanath) {
+            "Biswanath Chariali Civil Hospital"
+        } else {
+            "Tezpur Medical College & Hospital (TMCH)"
+        }
         docRef.set(
             mapOf(
                 "patientId" to uid,
@@ -520,10 +644,10 @@ class HealthcareRepository(private val db: FirebaseFirestore) {
                 "ambulanceType" to ambulanceType,
                 "status" to "DISPATCHED",
                 "vehicleNumber" to vehicleNo,
-                "driverName" to "Tezpur 108 EMS Team",
-                "driverPhone" to "+91 3712-108-420",
+                "driverName" to teamName,
+                "driverPhone" to driverPhone,
                 "etaMinutes" to 7L,
-                "hospitalDestination" to "Tezpur Medical College & Hospital (TMCH)",
+                "hospitalDestination" to destinationHospital,
                 "createdAt" to FieldValue.serverTimestamp(),
                 "updatedAt" to FieldValue.serverTimestamp()
             )
@@ -532,7 +656,7 @@ class HealthcareRepository(private val db: FirebaseFirestore) {
         val ambulanceLabel = if (ambulanceType == "ADVANCED_CARDIAC") "ICU / Cardiac (ACLS)" else "Basic Medical (BLS)"
         createNotification(
             title = "Emergency Ambulance Dispatched",
-            message = "Unit $vehicleNo ($ambulanceLabel) en route to $pickupAddress. ETA 7 mins.",
+            message = "Unit $vehicleNo ($ambulanceLabel) en route to $pickupAddress -> $destinationHospital. ETA 7 mins.",
             category = "EMERGENCY"
         )
         return docRef.id
@@ -555,10 +679,12 @@ class HealthcareRepository(private val db: FirebaseFirestore) {
         db.collection("payments")
             .whereEqualTo("patientId", uid)
             .snapshots()
-            .map { it.toObjects(PaymentRecord::class.java) }
+            .map { snap ->
+                snap.toEstimatedObjects(PaymentRecord::class.java)
+                    .sortedByDescending { it.createdAt?.seconds ?: 0L }
+            }
             .catch { error ->
-                if (error is CancellationException) throw error
-                Log.w("HealthcareRepo", "Error observing payments: ${error.message}")
+                handleStreamError(error, "payments")
                 emit(emptyList())
             }
             .collect { emit(it) }
@@ -600,12 +726,11 @@ class HealthcareRepository(private val db: FirebaseFirestore) {
             .whereEqualTo("patientId", uid)
             .snapshots()
             .map { snap ->
-                snap.toObjects(AppNotification::class.java)
+                snap.toEstimatedObjects(AppNotification::class.java)
                     .sortedByDescending { it.createdAt?.seconds ?: 0L }
             }
             .catch { error ->
-                if (error is CancellationException) throw error
-                Log.w("HealthcareRepo", "Error observing notifications: ${error.message}")
+                handleStreamError(error, "notifications")
                 emit(emptyList())
             }
             .collect { emit(it) }
@@ -650,12 +775,11 @@ class HealthcareRepository(private val db: FirebaseFirestore) {
         db.collection("reviews")
             .snapshots()
             .map { snap ->
-                snap.toObjects(Review::class.java)
+                snap.toEstimatedObjects(Review::class.java)
                     .sortedByDescending { it.createdAt?.seconds ?: 0L }
             }
             .catch { error ->
-                if (error is CancellationException) throw error
-                Log.w("HealthcareRepo", "Error observing reviews: ${error.message}")
+                handleStreamError(error, "reviews")
                 emit(emptyList())
             }
             .collect { emit(it) }
@@ -692,12 +816,11 @@ class HealthcareRepository(private val db: FirebaseFirestore) {
             .whereEqualTo("patientId", uid)
             .snapshots()
             .map { snap ->
-                snap.toObjects(SupportTicket::class.java)
+                snap.toEstimatedObjects(SupportTicket::class.java)
                     .sortedByDescending { it.createdAt?.seconds ?: 0L }
             }
             .catch { error ->
-                if (error is CancellationException) throw error
-                Log.w("HealthcareRepo", "Error observing support tickets: ${error.message}")
+                handleStreamError(error, "support tickets")
                 emit(emptyList())
             }
             .collect { emit(it) }
@@ -730,10 +853,12 @@ class HealthcareRepository(private val db: FirebaseFirestore) {
         db.collection("insurance_claims")
             .whereEqualTo("patientId", uid)
             .snapshots()
-            .map { it.toObjects(InsuranceClaim::class.java) }
+            .map { snap ->
+                snap.toEstimatedObjects(InsuranceClaim::class.java)
+                    .sortedByDescending { it.createdAt?.seconds ?: 0L }
+            }
             .catch { error ->
-                if (error is CancellationException) throw error
-                Log.w("HealthcareRepo", "Error observing insurance claims: ${error.message}")
+                handleStreamError(error, "insurance claims")
                 emit(emptyList())
             }
             .collect { emit(it) }
@@ -775,10 +900,12 @@ class HealthcareRepository(private val db: FirebaseFirestore) {
         db.collection("medical_records")
             .whereEqualTo("patientId", uid)
             .snapshots()
-            .map { it.toObjects(MedicalRecord::class.java) }
+            .map { snap ->
+                snap.toEstimatedObjects(MedicalRecord::class.java)
+                    .sortedByDescending { it.createdAt?.seconds ?: 0L }
+            }
             .catch { error ->
-                if (error is CancellationException) throw error
-                Log.w("HealthcareRepo", "Error observing medical records: ${error.message}")
+                handleStreamError(error, "medical records")
                 emit(emptyList())
             }
             .collect { emit(it) }
@@ -810,17 +937,30 @@ class HealthcareRepository(private val db: FirebaseFirestore) {
     // SECURE REAL-TIME MESSAGING
     // -------------------------------------------------------------
     fun observeConsultationMessages(consultationId: String): Flow<List<ChatMessage>> = flow {
-        db.collection("chat_messages")
-            .whereEqualTo("consultationId", consultationId)
-            .orderBy("createdAt", Query.Direction.ASCENDING)
+        val uid = requireUserId()
+        val sentFlow = db.collection("chat_messages")
+            .whereEqualTo("senderId", uid)
             .snapshots()
-            .map { it.toObjects(ChatMessage::class.java) }
+            .map { it.toEstimatedObjects(ChatMessage::class.java) }
             .catch { error ->
-                if (error is CancellationException) throw error
-                Log.w("HealthcareRepo", "Error observing chat messages: ${error.message}")
+                handleStreamError(error, "sent chat messages")
                 emit(emptyList())
             }
-            .collect { emit(it) }
+        val receivedFlow = db.collection("chat_messages")
+            .whereEqualTo("recipientId", uid)
+            .snapshots()
+            .map { it.toEstimatedObjects(ChatMessage::class.java) }
+            .catch { error ->
+                handleStreamError(error, "received chat messages")
+                emit(emptyList())
+            }
+
+        combine(sentFlow, receivedFlow) { sent, received ->
+            (sent + received)
+                .distinctBy { it.id }
+                .filter { it.consultationId == consultationId }
+                .sortedBy { it.createdAt?.seconds ?: Long.MAX_VALUE }
+        }.collect { emit(it) }
     }
 
     suspend fun sendChatMessage(
@@ -828,10 +968,21 @@ class HealthcareRepository(private val db: FirebaseFirestore) {
         recipientId: String,
         recipientName: String,
         message: String,
-        messageType: String = "TEXT"
+        messageType: String = "TEXT",
+        attachmentType: String = "",
+        attachmentPath: String = "",
+        attachmentName: String = ""
     ) {
         val uid = requireUserId()
         val docRef = db.collection("chat_messages").document()
+        val resolvedType = if (attachmentPath.isNotBlank()) "PRESCRIPTION" else messageType
+        val resolvedMessage = message.trim().ifBlank {
+            if (attachmentPath.isNotBlank()) {
+                "Shared prescription: ${attachmentName.ifBlank { "Medical Document" }}"
+            } else {
+                ""
+            }
+        }
         docRef.set(
             mapOf(
                 "consultationId" to consultationId,
@@ -840,9 +991,12 @@ class HealthcareRepository(private val db: FirebaseFirestore) {
                 "senderRole" to "PATIENT",
                 "recipientId" to recipientId,
                 "recipientName" to recipientName,
-                "message" to message,
+                "message" to resolvedMessage,
                 "isRead" to false,
-                "messageType" to messageType,
+                "messageType" to resolvedType,
+                "attachmentType" to attachmentType,
+                "attachmentPath" to attachmentPath,
+                "attachmentName" to attachmentName,
                 "createdAt" to FieldValue.serverTimestamp()
             )
         ).await()

@@ -56,6 +56,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.example.data.model.AmbulanceRequest
 import com.example.data.model.NearbyFacility
+import com.example.ui.i18n.LocalAppStrings
 
 @Composable
 fun PatientEmergencyTab(
@@ -65,6 +66,7 @@ fun PatientEmergencyTab(
     onTriggerSOS: () -> Unit,
     onResolveAmbulance: (String) -> Unit
 ) {
+    val strings = LocalAppStrings.current
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
@@ -109,7 +111,7 @@ fun PatientEmergencyTab(
                         }
                         Spacer(modifier = Modifier.height(16.dp))
                         Text(
-                            text = "Emergency Ambulance SOS",
+                            text = strings.emergencySosTitle,
                             style = MaterialTheme.typography.headlineSmall,
                             fontWeight = FontWeight.ExtraBold,
                             color = MaterialTheme.colorScheme.onErrorContainer,
@@ -117,7 +119,7 @@ fun PatientEmergencyTab(
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
-                            text = "Request a Tezpur 108 or hospital ambulance right to your location with direct casualty pre-alert.",
+                            text = strings.emergencySosDesc,
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.88f),
                             textAlign = TextAlign.Center
@@ -138,7 +140,7 @@ fun PatientEmergencyTab(
                             Icon(imageVector = Icons.Default.Emergency, contentDescription = null)
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                text = "DISPATCH AMBULANCE SOS",
+                                text = strings.dispatchAmbulanceCta,
                                 style = MaterialTheme.typography.titleSmall,
                                 fontWeight = FontWeight.ExtraBold
                             )
@@ -152,7 +154,7 @@ fun PatientEmergencyTab(
         item {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text(
-                    text = "Which Ambulance Should I Choose?",
+                    text = strings.whichAmbulanceTitle,
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold
                 )
@@ -171,16 +173,16 @@ fun PatientEmergencyTab(
             }
         }
 
-        // 3. Nearby 24/7 Emergency Hospitals in Tezpur
+        // 3. Nearby 24/7 Emergency Hospitals
         item {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(
-                    text = "24/7 Emergency Hospitals in Tezpur",
+                    text = strings.nearbyEmergencyHospitals,
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold
                 )
                 Text(
-                    text = "Sorted by distance from your selected Tezpur area",
+                    text = strings.nearbyEmergencySubtitle,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

@@ -1,10 +1,13 @@
 package com.example.data.model
 
+import androidx.annotation.Keep
 import com.google.firebase.Timestamp
 import com.google.firebase.firestore.DocumentId
 import com.google.firebase.firestore.IgnoreExtraProperties
+import com.google.firebase.firestore.PropertyName
 import com.google.firebase.firestore.ServerTimestamp
 
+@Keep
 @IgnoreExtraProperties
 data class FamilyMember(
     @DocumentId val id: String = "",
@@ -30,6 +33,7 @@ data class HomeCareService(
     val providerTeam: String
 )
 
+@Keep
 @IgnoreExtraProperties
 data class HomeCareBooking(
     @DocumentId val id: String = "",
@@ -51,6 +55,7 @@ data class HomeCareBooking(
     @ServerTimestamp val updatedAt: Timestamp? = null
 )
 
+@Keep
 @IgnoreExtraProperties
 data class PaymentRecord(
     @DocumentId val id: String = "",
@@ -60,12 +65,13 @@ data class PaymentRecord(
     val category: String = "APPOINTMENT", // APPOINTMENT, DIAGNOSTIC, HOME_CARE
     val billingForName: String = "Self",
     val amount: Double = 0.0,
-    val paymentMethod: String = "Card •••• 4242",
+    val paymentMethod: String = "UPI / Card",
     val status: String = "PAID", // PAID, PAY_AT_COUNTER
     val transactionRef: String = "",
     @ServerTimestamp val createdAt: Timestamp? = null
 )
 
+@Keep
 @IgnoreExtraProperties
 data class AppNotification(
     @DocumentId val id: String = "",
@@ -73,10 +79,13 @@ data class AppNotification(
     val title: String = "",
     val message: String = "",
     val category: String = "BOOKING", // BOOKING, LAB, PAYMENT, EMERGENCY, SUPPORT
+    @get:PropertyName("isRead")
+    @PropertyName("isRead")
     val isRead: Boolean = false,
     @ServerTimestamp val createdAt: Timestamp? = null
 )
 
+@Keep
 @IgnoreExtraProperties
 data class Review(
     @DocumentId val id: String = "",
@@ -90,6 +99,7 @@ data class Review(
     @ServerTimestamp val createdAt: Timestamp? = null
 )
 
+@Keep
 @IgnoreExtraProperties
 data class SupportTicket(
     @DocumentId val id: String = "",

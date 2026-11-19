@@ -29,6 +29,8 @@ import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Payments
 import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material.icons.filled.ReceiptLong
+import androidx.compose.material.icons.filled.ShoppingBag
+import androidx.compose.material.icons.filled.SupportAgent
 import androidx.compose.material.icons.filled.VerifiedUser
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -51,23 +53,32 @@ import androidx.compose.ui.unit.dp
 import com.example.data.model.FamilyMember
 import com.example.data.model.InsuranceClaim
 import com.example.data.model.PaymentRecord
+import com.example.data.model.UserInsurancePolicy
 import com.example.data.model.UserProfile
+import com.example.ui.i18n.LocalAppStrings
+import java.text.NumberFormat
+import java.util.Locale
 
 @Composable
 fun PatientProfileTab(
     profile: UserProfile?,
     familyMembers: List<FamilyMember>,
     paymentRecords: List<PaymentRecord>,
+    userPolicies: List<UserInsurancePolicy>,
+    tiedUpInsurerCount: Int,
     claims: List<InsuranceClaim>,
     onEditProfile: () -> Unit,
     onOpenLocationPicker: () -> Unit,
     onAddFamilyMember: () -> Unit,
     onDeleteFamilyMember: (String) -> Unit,
-    onSubmitClaim: () -> Unit,
+    onOpenInsuranceHub: (initialTab: Int) -> Unit,
+    onAddInsurancePolicy: () -> Unit,
+    onSubmitClaim: (UserInsurancePolicy?) -> Unit,
     onOpenHelpSupport: () -> Unit,
     onOpenSupportChat: () -> Unit,
     onSignOut: () -> Unit
 ) {
+    val strings = LocalAppStrings.current
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
@@ -106,7 +117,7 @@ fun PatientProfileTab(
                         Spacer(modifier = Modifier.width(12.dp))
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = profile?.displayName?.ifBlank { "Nidanmita Patient" } ?: "Nidanmita Patient",
+                                text = profile?.displayName?.ifBlank { "Nidanmitra Patient" } ?: "Nidanmitra Patient",
                                 style = MaterialTheme.typography.titleLarge,
                                 fontWeight = FontWeight.Bold
                             )
@@ -193,7 +204,7 @@ fun PatientProfileTab(
                     Icon(Icons.Default.FamilyRestroom, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
-                        text = "Family Profiles (${familyMembers.size})",
+                        text = "${strings.familyProfilesTitle} (${familyMembers.size})",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold
                     )
@@ -204,7 +215,7 @@ fun PatientProfileTab(
                 ) {
                     Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text("Add Member")
+                    Text(strings.addMember)
                 }
             }
         }
@@ -267,7 +278,7 @@ fun PatientProfileTab(
                 Icon(Icons.Default.ReceiptLong, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                 Spacer(modifier = Modifier.width(6.dp))
                 Text(
-                    text = "Payments & Receipts (${paymentRecords.size})",
+                    text = "${strings.paymentsReceiptsTitle} (${paymentRecords.size})",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold
                 )
@@ -311,35 +322,126 @@ fun PatientProfileTab(
             }
         }
 
-        // 4. Health Insurance Policy Card
+        // 4. Health Insurance (Consumer-Added Policies + Tied-Up Partners + Assistance)
         item {
+            val inrFormatter = NumberFormat.getNumberInstance(Locale("en", "IN"))
             Card(
                 shape = RoundedCornerShape(18.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer),
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Column(modifier = Modifier.padding(16.dp)) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text("Health Insurance Policy", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = strings.myHealthInsurance,
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.ExtraBold
+                            )
+                            Text(
+                                text = "$tiedUpInsurerCount tied-up insurers • Cashless TPA Desk",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.secondary
+                            )
+                        }
                         Icon(Icons.Default.VerifiedUser, contentDescription = null, tint = MaterialTheme.colorScheme.secondary)
                     }
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Text("Star Health Assure & PM-JAY", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold)
-                    Text("Policy #SH-AS-784210 • Annual Cover: ₹5,00,000", style = MaterialTheme.typography.bodySmall)
-                    Spacer(modifier = Modifier.height(10.dp))
-                    Button(
-                        onClick = onSubmitClaim,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .testTag("submit_claim_banner_button")
+
+                    if (userPolicies.isEmpty()) {
+                        Text(
+                            text = "No personal insurance policy added yet. Add your own purchased health plan (or PM-JAY / MMAAY card), or compare & purchase from Nidanmitra's tied-up insurers.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer
+                        )
+                    } else {
+                        val primaryPolicy = userPolicies.first()
+                        Text(
+                            text = "${primaryPolicy.insurerName} — ${primaryPolicy.planName}",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.ExtraBold
+                        )
+                        Text(
+                            text = "Policy #${primaryPolicy.policyNumber} • Cover: ₹${inrFormatter.format(primaryPolicy.sumInsured.toLong())}" +
+                                if (userPolicies.size > 1) " (+${userPolicies.size - 1} more)" else "",
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Icon(Icons.Default.Payments, contentDescription = null)
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Submit Cashless Hospital Claim")
+                        Button(
+                            onClick = onAddInsurancePolicy,
+                            modifier = Modifier
+                                .weight(1f)
+                                .testTag("profile_add_policy_button"),
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
+                            Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(strings.addPolicy, maxLines = 1)
+                        }
+                        OutlinedButton(
+                            onClick = { onOpenInsuranceHub(1) },
+                            modifier = Modifier
+                                .weight(1.2f)
+                                .testTag("profile_tied_up_insurers_button"),
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
+                            Icon(Icons.Default.ShoppingBag, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(strings.buyInsurers, maxLines = 1)
+                        }
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        OutlinedButton(
+                            onClick = { onOpenInsuranceHub(2) },
+                            modifier = Modifier
+                                .weight(1f)
+                                .testTag("profile_insurance_assistance_button"),
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
+                            Icon(Icons.Default.SupportAgent, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(strings.assistance, maxLines = 1)
+                        }
+                        if (userPolicies.isNotEmpty()) {
+                            OutlinedButton(
+                                onClick = { onSubmitClaim(userPolicies.first()) },
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .testTag("submit_claim_banner_button"),
+                                shape = RoundedCornerShape(10.dp)
+                            ) {
+                                Icon(Icons.Default.Payments, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(strings.fileClaim, maxLines = 1)
+                            }
+                        } else {
+                            OutlinedButton(
+                                onClick = { onOpenInsuranceHub(0) },
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .testTag("submit_claim_banner_button"),
+                                shape = RoundedCornerShape(10.dp)
+                            ) {
+                                Icon(Icons.Default.VerifiedUser, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(strings.openHub, maxLines = 1)
+                            }
+                        }
                     }
                 }
             }
@@ -384,7 +486,7 @@ fun PatientProfileTab(
                 ) {
                     Icon(Icons.Default.HelpCenter, contentDescription = null)
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("Help & Support (FAQs & Tickets)")
+                    Text(strings.helpAndSupport)
                 }
 
                 OutlinedButton(
@@ -397,7 +499,7 @@ fun PatientProfileTab(
                 ) {
                     Icon(Icons.Default.Chat, contentDescription = null)
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("Message Care Coordinator / Specialist")
+                    Text(strings.messageCareCoordinator)
                 }
 
                 OutlinedButton(
@@ -411,7 +513,7 @@ fun PatientProfileTab(
                 ) {
                     Icon(Icons.AutoMirrored.Filled.ExitToApp, contentDescription = null)
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("Sign Out", fontWeight = FontWeight.Bold)
+                    Text(strings.signOut, fontWeight = FontWeight.Bold)
                 }
             }
         }

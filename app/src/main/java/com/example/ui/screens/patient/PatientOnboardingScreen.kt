@@ -115,7 +115,7 @@ fun PatientOnboardingScreen(
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
                         Text(
-                            text = "Welcome to Nidanmita",
+                            text = "Welcome to Nidanmitra",
                             style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.ExtraBold,
                             color = MaterialTheme.colorScheme.primary

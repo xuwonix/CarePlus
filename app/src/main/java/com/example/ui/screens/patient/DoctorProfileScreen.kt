@@ -25,6 +25,7 @@ import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Chat
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.LocalHospital
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.MedicalServices
 import androidx.compose.material.icons.filled.RateReview
 import androidx.compose.material.icons.filled.School
@@ -66,9 +67,11 @@ import com.example.data.model.Specialist
 @Composable
 fun DoctorProfileScreen(
     specialist: Specialist,
+    isBooked: Boolean,
     reviews: List<Review>,
     onBookAppointment: () -> Unit,
     onOpenChat: () -> Unit,
+    onLockedChatAttempt: () -> Unit,
     onSubmitReview: (rating: Int, comment: String) -> Unit,
     onBack: () -> Unit
 ) {
@@ -216,33 +219,52 @@ fun DoctorProfileScreen(
 
             // Action Buttons
             item {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    OutlinedButton(
-                        onClick = onOpenChat,
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(48.dp)
-                            .testTag("doctor_profile_chat_button"),
-                        shape = RoundedCornerShape(12.dp)
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        Icon(Icons.Default.Chat, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("Message", fontWeight = FontWeight.SemiBold)
+                        OutlinedButton(
+                            onClick = { if (isBooked) onOpenChat() else onLockedChatAttempt() },
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(48.dp)
+                                .testTag("doctor_profile_chat_button"),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Icon(
+                                imageVector = if (isBooked) Icons.Default.Chat else Icons.Default.Lock,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp),
+                                tint = if (isBooked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = if (isBooked) "Message" else "Booked Only",
+                                fontWeight = FontWeight.SemiBold,
+                                maxLines = 1,
+                                color = if (isBooked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Button(
+                            onClick = onBookAppointment,
+                            modifier = Modifier
+                                .weight(1.45f)
+                                .height(48.dp)
+                                .testTag("doctor_profile_book_button"),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Icon(Icons.Default.CalendarMonth, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Book Appointment", fontWeight = FontWeight.Bold)
+                        }
                     }
-                    Button(
-                        onClick = onBookAppointment,
-                        modifier = Modifier
-                            .weight(1.5f)
-                            .height(48.dp)
-                            .testTag("doctor_profile_book_button"),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Icon(Icons.Default.CalendarMonth, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("Book Appointment", fontWeight = FontWeight.Bold)
+                    if (!isBooked) {
+                        Text(
+                            text = "Direct messaging & prescription sharing unlocks after booking an appointment with ${specialist.name}.",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
                 }
             }

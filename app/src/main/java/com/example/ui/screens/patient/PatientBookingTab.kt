@@ -23,6 +23,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Chat
 import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.MedicalServices
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Star
@@ -59,6 +60,7 @@ import com.example.data.model.DiagnosticTest
 import com.example.data.model.HomeCareBooking
 import com.example.data.model.HomeCareService
 import com.example.data.model.Specialist
+import com.example.ui.i18n.LocalAppStrings
 import com.example.ui.viewmodel.HealthcareUiState
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -77,9 +79,16 @@ fun PatientBookingTab(
     onCancelDiagnostic: (String) -> Unit,
     onRescheduleHomeCare: (HomeCareBooking) -> Unit,
     onCancelHomeCare: (String) -> Unit,
-    onOpenChatWithDoctor: (doctorName: String, doctorId: String) -> Unit
+    onOpenChatWithDoctor: (doctorName: String, doctorId: String) -> Unit,
+    onLockedChatAttempt: (Specialist) -> Unit
 ) {
-    val subTabs = listOf("Doctors", "Lab Tests", "Home Care", "My Bookings")
+    val strings = LocalAppStrings.current
+    val subTabs = listOf(
+        "doctors" to strings.bookingTabDoctors,
+        "lab_tests" to strings.bookingTabLabs,
+        "home_care" to strings.bookingTabHomeCare,
+        "my_bookings" to strings.bookingTabMyBookings
+    )
     var localSearch by remember { mutableStateOf("") }
 
     Column(
@@ -91,7 +100,7 @@ fun PatientBookingTab(
             selectedTabIndex = state.bookingSubTab.coerceIn(0, subTabs.lastIndex),
             modifier = Modifier.fillMaxWidth()
         ) {
-            subTabs.forEachIndexed { index, title ->
+            subTabs.forEachIndexed { index, (tagKey, title) ->
                 Tab(
                     selected = state.bookingSubTab == index,
                     onClick = { onSelectSubTab(index) },
@@ -102,7 +111,7 @@ fun PatientBookingTab(
                             fontWeight = if (state.bookingSubTab == index) FontWeight.Bold else FontWeight.Normal
                         )
                     },
-                    modifier = Modifier.testTag("booking_subtab_${title.lowercase().replace(" ", "_")}")
+                    modifier = Modifier.testTag("booking_subtab_$tagKey")
                 )
             }
         }
@@ -110,13 +119,15 @@ fun PatientBookingTab(
         when (state.bookingSubTab) {
             0 -> DoctorsBookingSection(
                 specialists = state.specialists,
+                bookedSpecialistIds = state.bookedSpecialistIds,
                 selectedSpecialty = state.selectedSpecialtyFilter,
                 searchQuery = localSearch,
                 onSearchChange = { localSearch = it },
                 onSelectSpecialty = onSelectSpecialty,
                 onOpenProfile = onOpenDoctorProfile,
                 onBook = onBookDoctor,
-                onChat = { onOpenChatWithDoctor(it.name, it.id) }
+                onChat = { onOpenChatWithDoctor(it.name, it.id) },
+                onLockedChatAttempt = onLockedChatAttempt
             )
             1 -> DiagnosticsBookingSection(
                 centers = state.diagnosticCenters,
@@ -148,15 +159,18 @@ fun PatientBookingTab(
 @Composable
 private fun DoctorsBookingSection(
     specialists: List<Specialist>,
+    bookedSpecialistIds: Set<String>,
     selectedSpecialty: String,
     searchQuery: String,
     onSearchChange: (String) -> Unit,
     onSelectSpecialty: (String) -> Unit,
     onOpenProfile: (Specialist) -> Unit,
     onBook: (Specialist) -> Unit,
-    onChat: (Specialist) -> Unit
+    onChat: (Specialist) -> Unit,
+    onLockedChatAttempt: (Specialist) -> Unit
 ) {
-    val specialties = listOf("All", "Cardiology", "Neurology", "Orthopedics", "Pediatrics", "Dermatology", "General Medicine")
+    val strings = LocalAppStrings.current
+    val specialties = listOf("All", "Cardiology", "Neurology", "Orthopedics", "Pediatrics", "Gynecology", "Dermatology", "General Medicine")
     var videoOnly by remember { mutableStateOf(false) }
     var sortByFee by remember { mutableStateOf(false) }
 
@@ -182,7 +196,7 @@ private fun DoctorsBookingSection(
             OutlinedTextField(
                 value = searchQuery,
                 onValueChange = onSearchChange,
-                placeholder = { Text("Filter doctors, specialties, hospitals...") },
+                placeholder = { Text(strings.filterDoctorsPlaceholder) },
                 leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
                 trailingIcon = {
                     if (searchQuery.isNotEmpty()) {
@@ -215,23 +229,27 @@ private fun DoctorsBookingSection(
                 FilterChip(
                     selected = videoOnly,
                     onClick = { videoOnly = !videoOnly },
-                    label = { Text("Video Consult") },
+                    label = { Text(strings.videoConsult) },
                     leadingIcon = { Icon(Icons.Default.Videocam, contentDescription = null, modifier = Modifier.size(16.dp)) }
                 )
                 FilterChip(
                     selected = sortByFee,
                     onClick = { sortByFee = !sortByFee },
-                    label = { Text("Fee: Low to High") }
+                    label = { Text(strings.feeLowToHigh) }
                 )
             }
         }
 
         items(filtered) { specialist ->
+            val isBooked = specialist.id in bookedSpecialistIds
             BookingSpecialistCard(
                 specialist = specialist,
+                isBooked = isBooked,
                 onOpenProfile = { onOpenProfile(specialist) },
                 onBook = { onBook(specialist) },
-                onChat = { onChat(specialist) }
+                onChat = {
+                    if (isBooked) onChat(specialist) else onLockedChatAttempt(specialist)
+                }
             )
         }
     }
@@ -240,10 +258,12 @@ private fun DoctorsBookingSection(
 @Composable
 private fun BookingSpecialistCard(
     specialist: Specialist,
+    isBooked: Boolean,
     onOpenProfile: () -> Unit,
     onBook: () -> Unit,
     onChat: () -> Unit
 ) {
+    val strings = LocalAppStrings.current
     Card(
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
@@ -306,9 +326,19 @@ private fun BookingSpecialistCard(
                         .weight(1f)
                         .testTag("message_doctor_button_${specialist.id}")
                 ) {
-                    Icon(Icons.Default.Chat, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Icon(
+                        imageVector = if (isBooked) Icons.Default.Chat else Icons.Default.Lock,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp),
+                        tint = if (isBooked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                     Spacer(modifier = Modifier.width(6.dp))
-                    Text("Chat")
+                    Text(
+                        text = if (isBooked) strings.chatAction else strings.bookedOnly,
+                        maxLines = 1,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = if (isBooked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
                 Button(
                     onClick = onBook,
@@ -318,7 +348,7 @@ private fun BookingSpecialistCard(
                 ) {
                     Icon(Icons.Default.CalendarMonth, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(modifier = Modifier.width(6.dp))
-                    Text("Book Slot")
+                    Text(strings.bookSlot)
                 }
             }
         }
@@ -332,6 +362,7 @@ private fun DiagnosticsBookingSection(
     onSearchChange: (String) -> Unit,
     onBookTest: (DiagnosticCenter, DiagnosticTest) -> Unit
 ) {
+    val strings = LocalAppStrings.current
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(16.dp),
@@ -341,7 +372,7 @@ private fun DiagnosticsBookingSection(
             OutlinedTextField(
                 value = searchQuery,
                 onValueChange = onSearchChange,
-                placeholder = { Text("Search blood panels, MRI, ECG, ultrasound...") },
+                placeholder = { Text(strings.filterLabsPlaceholder) },
                 leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
                 singleLine = true,
                 shape = RoundedCornerShape(14.dp),

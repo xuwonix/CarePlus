@@ -50,6 +50,7 @@ import com.example.data.model.HealthServiceCategory
 import com.example.data.model.NearbyFacility
 import com.example.data.model.ProcedureGuide
 import com.example.data.model.Specialist
+import com.example.ui.i18n.LocalAppStrings
 import com.example.ui.viewmodel.HealthcareUiState
 import com.example.ui.viewmodel.MainNavTab
 
@@ -65,9 +66,12 @@ fun PatientHomeTab(
     onBookSpecialist: (Specialist) -> Unit,
     onBookDiagnostic: (DiagnosticCenter, DiagnosticTest) -> Unit,
     onOpenChatWithDoctor: (doctorName: String, doctorId: String) -> Unit,
+    onLockedChatAttempt: (Specialist) -> Unit,
     onSelectProcedure: (ProcedureGuide) -> Unit,
+    onOpenInsuranceHub: () -> Unit,
     onQuickEmergencySos: () -> Unit
 ) {
+    val strings = LocalAppStrings.current
     val activeAmbulance = state.patientAmbulanceRequests.firstOrNull { it.status != "COMPLETED" }
     val upcomingAppointments = state.patientAppointments.filter { it.status == "SCHEDULED" }
     val upcomingLabBookings = state.patientDiagnosticBookings.filter {
@@ -110,13 +114,13 @@ fun PatientHomeTab(
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = "Hello, $firstName",
+                            text = "${strings.helloPrefix}, $firstName",
                             style = MaterialTheme.typography.headlineMedium,
                             fontWeight = FontWeight.ExtraBold,
                             color = MaterialTheme.colorScheme.onBackground
                         )
                         Text(
-                            text = "Doctors, labs, home care & hospitals",
+                            text = strings.homeSubtitle,
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -158,7 +162,7 @@ fun PatientHomeTab(
                     onValueChange = onSearchQueryChange,
                     placeholder = {
                         Text(
-                            text = "Search doctors, tests, home care, hospitals...",
+                            text = strings.searchPlaceholder,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
@@ -231,7 +235,9 @@ fun PatientHomeTab(
             }
             val matchedCategories = HealthServiceCategory.entries.filter {
                 it.title.contains(query, ignoreCase = true) ||
-                    it.subtitle.contains(query, ignoreCase = true)
+                    it.subtitle.contains(query, ignoreCase = true) ||
+                    strings.categoryTitle(it).contains(query, ignoreCase = true) ||
+                    strings.categorySubtitle(it).contains(query, ignoreCase = true)
             }
 
             val totalMatches = matchedDoctors.size + matchedTests.size +
@@ -265,7 +271,7 @@ fun PatientHomeTab(
                             Spacer(modifier = Modifier.height(8.dp))
                             Text("No matches found for \"$query\"", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
                             Text(
-                                text = "Try Cardiology, MRI, Nursing, TMCH, Baptist, or Endoscopy.",
+                                text = "Try Cardiology, Gynecology, MRI, TMCH, Biswanath, Pragati, or Endoscopy.",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -276,11 +282,19 @@ fun PatientHomeTab(
                 if (matchedDoctors.isNotEmpty()) {
                     item { SectionTitle("Doctors (${matchedDoctors.size})") }
                     items(matchedDoctors) { doctor ->
+                        val isBooked = doctor.id in state.bookedSpecialistIds
                         SearchDoctorResultCard(
                             specialist = doctor,
+                            isBooked = isBooked,
                             onOpenProfile = { onOpenDoctorProfile(doctor) },
                             onBook = { onBookSpecialist(doctor) },
-                            onChat = { onOpenChatWithDoctor(doctor.name, doctor.id) }
+                            onChat = {
+                                if (isBooked) {
+                                    onOpenChatWithDoctor(doctor.name, doctor.id)
+                                } else {
+                                    onLockedChatAttempt(doctor)
+                                }
+                            }
                         )
                     }
                 }
@@ -329,7 +343,7 @@ fun PatientHomeTab(
                         HealthServiceGrid(
                             categories = matchedCategories,
                             onCategoryClick = { cat ->
-                                handleCategoryNavigation(cat, onNavigateTab, onNavigateToBooking, onQuickEmergencySos)
+                                handleCategoryNavigation(cat, onNavigateTab, onNavigateToBooking, onOpenInsuranceHub, onQuickEmergencySos)
                             }
                         )
                     }
@@ -340,8 +354,8 @@ fun PatientHomeTab(
             item {
                 Column(modifier = Modifier.fillMaxWidth()) {
                     SectionHeaderRow(
-                        title = "Upcoming Appointments",
-                        actionLabel = if (hasUpcoming) "View All" else "Book Now",
+                        title = strings.upcomingAppointments,
+                        actionLabel = if (hasUpcoming) strings.viewAll else strings.bookNow,
                         onAction = { onNavigateToBooking(if (hasUpcoming) 3 else 0, "All") }
                     )
                     Spacer(modifier = Modifier.height(8.dp))
@@ -373,14 +387,14 @@ fun PatientHomeTab(
                                 }
                                 Spacer(modifier = Modifier.width(12.dp))
                                 Column(modifier = Modifier.weight(1f)) {
-                                    Text("No upcoming visits scheduled", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                                    Text(strings.noUpcomingVisits, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
                                     Text(
-                                        text = "Book a specialist consultation or diagnostic lab test in Tezpur",
+                                        text = strings.noUpcomingVisitsSubtitle,
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                 }
-                                Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = "Book appointment", tint = MaterialTheme.colorScheme.primary)
+                                Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = strings.bookNow, tint = MaterialTheme.colorScheme.primary)
                             }
                         }
                     } else {
@@ -409,12 +423,12 @@ fun PatientHomeTab(
             // Health Service Categories
             item {
                 Column(modifier = Modifier.fillMaxWidth()) {
-                    SectionTitle("Health Service Categories")
+                    SectionTitle(strings.healthServiceCategories)
                     Spacer(modifier = Modifier.height(10.dp))
                     HealthServiceGrid(
                         categories = HealthServiceCategory.entries,
                         onCategoryClick = { cat ->
-                            handleCategoryNavigation(cat, onNavigateTab, onNavigateToBooking, onQuickEmergencySos)
+                            handleCategoryNavigation(cat, onNavigateTab, onNavigateToBooking, onOpenInsuranceHub, onQuickEmergencySos)
                         }
                     )
                 }
@@ -424,8 +438,8 @@ fun PatientHomeTab(
             item {
                 Column(modifier = Modifier.fillMaxWidth()) {
                     SectionHeaderRow(
-                        title = "Popular Medical Specialties",
-                        actionLabel = "See All",
+                        title = strings.popularSpecialties,
+                        actionLabel = strings.seeAll,
                         onAction = { onNavigateToBooking(0, "All") }
                     )
                     Spacer(modifier = Modifier.height(10.dp))
@@ -447,12 +461,12 @@ fun PatientHomeTab(
             item {
                 Column {
                     SectionHeaderRow(
-                        title = "Nearby Hospitals & Diagnostic Centres",
-                        actionLabel = "Book Test",
+                        title = strings.nearbyHospitalsTitle,
+                        actionLabel = strings.bookTestAction,
                         onAction = { onNavigateToBooking(1, "All") }
                     )
                     Text(
-                        text = "Showing care facilities near ${state.selectedLocationArea}",
+                        text = "${strings.showingFacilitiesNear} ${state.selectedLocationArea}",
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.padding(horizontal = 16.dp)
@@ -474,6 +488,7 @@ private fun handleCategoryNavigation(
     category: HealthServiceCategory,
     onNavigateTab: (MainNavTab) -> Unit,
     onNavigateToBooking: (Int, String) -> Unit,
+    onOpenInsuranceHub: () -> Unit,
     onQuickEmergencySos: () -> Unit
 ) {
     when (category) {
@@ -481,7 +496,7 @@ private fun handleCategoryNavigation(
         HealthServiceCategory.LAB_DIAGNOSTICS -> onNavigateToBooking(1, "All")
         HealthServiceCategory.HOME_CARE -> onNavigateToBooking(2, "All")
         HealthServiceCategory.EMERGENCY_EMS -> onQuickEmergencySos()
-        HealthServiceCategory.HEALTH_INSURANCE -> onNavigateTab(MainNavTab.PROFILE)
+        HealthServiceCategory.HEALTH_INSURANCE -> onOpenInsuranceHub()
         HealthServiceCategory.PROCEDURE_GUIDES -> onNavigateTab(MainNavTab.RECORDS)
     }
 }

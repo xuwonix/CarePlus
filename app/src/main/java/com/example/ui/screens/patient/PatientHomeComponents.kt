@@ -27,6 +27,7 @@ import androidx.compose.material.icons.filled.Healing
 import androidx.compose.material.icons.filled.HomeWork
 import androidx.compose.material.icons.filled.LocalHospital
 import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.MedicalServices
 import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material.icons.filled.Star
@@ -59,6 +60,7 @@ import com.example.data.model.HealthServiceCategory
 import com.example.data.model.MedicalSpecialtyItem
 import com.example.data.model.NearbyFacility
 import com.example.data.model.Specialist
+import com.example.ui.i18n.LocalAppStrings
 
 @Composable
 fun SectionTitle(title: String) {
@@ -305,6 +307,7 @@ fun HealthServiceGrid(
     categories: List<HealthServiceCategory>,
     onCategoryClick: (HealthServiceCategory) -> Unit
 ) {
+    val strings = LocalAppStrings.current
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -372,23 +375,24 @@ fun HealthServiceGrid(
                                     .background(bg),
                                 contentAlignment = Alignment.Center
                             ) {
+                                val catTitle = strings.categoryTitle(category)
                                 Icon(
                                     imageVector = icon,
-                                    contentDescription = category.title,
+                                    contentDescription = catTitle,
                                     tint = tint,
                                     modifier = Modifier.size(24.dp)
                                 )
                             }
                             Spacer(modifier = Modifier.height(8.dp))
                             Text(
-                                text = category.title,
+                                text = strings.categoryTitle(category),
                                 style = MaterialTheme.typography.labelLarge,
                                 fontWeight = FontWeight.Bold,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
                             Text(
-                                text = category.subtitle,
+                                text = strings.categorySubtitle(category),
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 maxLines = 1,
@@ -412,6 +416,7 @@ fun SpecialtyTileCard(
     specialty: MedicalSpecialtyItem,
     onClick: () -> Unit
 ) {
+    val strings = LocalAppStrings.current
     val icon: ImageVector = when (specialty.name) {
         "Cardiology" -> Icons.Default.Favorite
         "Neurology" -> Icons.Default.Psychology
@@ -461,7 +466,7 @@ fun SpecialtyTileCard(
             )
             Spacer(modifier = Modifier.height(6.dp))
             Text(
-                text = "${specialty.doctorCount} Doctors",
+                text = "${specialty.doctorCount} ${strings.doctorsCountSuffix}",
                 style = MaterialTheme.typography.labelSmall,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.primary
@@ -475,6 +480,7 @@ fun NearbyFacilityCard(
     facility: NearbyFacility,
     onAction: () -> Unit
 ) {
+    val strings = LocalAppStrings.current
     val isHospital = facility.facilityType == "HOSPITAL"
     Card(
         shape = RoundedCornerShape(16.dp),
@@ -603,7 +609,7 @@ fun NearbyFacilityCard(
                 shape = RoundedCornerShape(10.dp)
             ) {
                 Text(
-                    text = if (isHospital) "View Hospital & Doctors" else "View Lab & Tests",
+                    text = if (isHospital) strings.viewHospitalDoctors else strings.viewLabTests,
                     fontWeight = FontWeight.SemiBold
                 )
             }
@@ -614,6 +620,7 @@ fun NearbyFacilityCard(
 @Composable
 fun SearchDoctorResultCard(
     specialist: Specialist,
+    isBooked: Boolean,
     onOpenProfile: () -> Unit,
     onBook: () -> Unit,
     onChat: () -> Unit
@@ -639,9 +646,13 @@ fun SearchDoctorResultCard(
                 Text("${specialist.specialty} • ${specialist.clinicHospital}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Text("Next: ${specialist.nextAvailableSlot} • ₹${specialist.fee.toInt()}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
             }
-            Row {
+            Row(verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClick = onChat) {
-                    Icon(Icons.Default.Chat, contentDescription = "Chat", tint = MaterialTheme.colorScheme.primary)
+                    Icon(
+                        imageVector = if (isBooked) Icons.Default.Chat else Icons.Default.Lock,
+                        contentDescription = if (isBooked) "Chat with doctor" else "Book appointment to chat",
+                        tint = if (isBooked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
                 Button(onClick = onBook) {
                     Text("Book")

@@ -14,6 +14,7 @@ import com.example.data.model.FamilyMember
 import com.example.data.model.HomeCareBooking
 import com.example.data.model.HomeCareService
 import com.example.data.model.InsuranceClaim
+import com.example.data.model.InsurancePartner
 import com.example.data.model.MedicalRecord
 import com.example.data.model.MedicalSpecialtyItem
 import com.example.data.model.NearbyFacility
@@ -22,15 +23,21 @@ import com.example.data.model.ProcedureGuide
 import com.example.data.model.Review
 import com.example.data.model.Specialist
 import com.example.data.model.SupportTicket
+import com.example.data.model.UserInsurancePolicy
 import com.example.data.model.UserProfile
 import com.example.data.repository.HealthcareCatalog
 import com.example.data.repository.HealthcareRepository
+import java.util.UUID
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 enum class MainNavTab(val label: String) {
     HOME("Home"),
@@ -59,14 +66,16 @@ data class HealthcareUiState(
     val patientInsuranceClaims: List<InsuranceClaim> = emptyList(),
     val medicalRecords: List<MedicalRecord> = emptyList(),
     val currentChatMessages: List<ChatMessage> = emptyList(),
-    val activeConsultationId: String = "consultation_default",
-    val activeRecipientName: String = "Dr. Ananya Baruah, MD, DM",
-    val activeRecipientId: String = "doc_cardio_1",
+    val activeConsultationId: String = HealthcareRepository.SUPPORT_DESK_CONSULTATION_ID,
+    val activeRecipientName: String = HealthcareRepository.SUPPORT_DESK_RECIPIENT_NAME,
+    val activeRecipientId: String = HealthcareRepository.SUPPORT_DESK_RECIPIENT_ID,
+    val activeRecipientSpecialty: String = "24/7 Tezpur & Biswanath Care Desk",
     val specialists: List<Specialist> = emptyList(),
     val diagnosticCenters: List<DiagnosticCenter> = emptyList(),
     val nearbyFacilities: List<NearbyFacility> = emptyList(),
     val popularSpecialties: List<MedicalSpecialtyItem> = emptyList(),
     val homeCareServices: List<HomeCareService> = emptyList(),
+    val insurancePartners: List<InsurancePartner> = emptyList(),
     val procedureGuides: List<ProcedureGuide> = emptyList(),
     val completedChecklistSteps: Set<String> = emptySet(),
     val isLoading: Boolean = false,
@@ -74,6 +83,23 @@ data class HealthcareUiState(
 ) {
     val unreadNotificationCount: Int
         get() = notifications.count { !it.isRead }
+
+    val userInsurancePolicies: List<UserInsurancePolicy>
+        get() = userProfile?.insurancePolicies ?: emptyList()
+
+    val bookedSpecialistIds: Set<String>
+        get() = patientAppointments
+            .filter { it.status != "CANCELLED" }
+            .map { it.specialistId }
+            .toSet()
+
+    fun hasBookedDoctor(specialistId: String): Boolean = specialistId in bookedSpecialistIds
+
+    fun canMessageRecipient(recipientId: String): Boolean {
+        return recipientId == HealthcareRepository.SUPPORT_DESK_RECIPIENT_ID ||
+            recipientId == HealthcareRepository.INSURANCE_DESK_RECIPIENT_ID ||
+            hasBookedDoctor(recipientId)
+    }
 }
 
 class CarePulseViewModel(application: Application) : AndroidViewModel(application) {
@@ -88,6 +114,7 @@ class CarePulseViewModel(application: Application) : AndroidViewModel(applicatio
             nearbyFacilities = HealthcareCatalog.getNearbyHospitalsAndCenters("Mission Chariali, Tezpur"),
             popularSpecialties = HealthcareCatalog.getPopularSpecialties(),
             homeCareServices = HealthcareCatalog.getHomeCareServices(),
+            insurancePartners = HealthcareCatalog.getTiedUpInsurancePartners(),
             procedureGuides = HealthcareCatalog.getProcedureGuides()
         )
     )
@@ -101,7 +128,25 @@ class CarePulseViewModel(application: Application) : AndroidViewModel(applicatio
         repository.getCurrentUser() ?: return
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true) }
-            val profile = repository.getOrCreateUserProfile()
+            val profile = try {
+                repository.getOrCreateUserProfile()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                val user = repository.getCurrentUser()
+                _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        feedbackMessage = "Could not sync profile right now. Showing offline profile."
+                    )
+                }
+                UserProfile(
+                    userId = user?.uid ?: "",
+                    email = user?.email ?: "",
+                    displayName = user?.displayName ?: "Nidanmitra Patient",
+                    onboardingCompleted = true
+                )
+            }
             val area = profile.locationArea.ifBlank { "Mission Chariali, Tezpur" }
             _uiState.update {
                 it.copy(
@@ -295,7 +340,7 @@ class CarePulseViewModel(application: Application) : AndroidViewModel(applicatio
         mode: String,
         notes: String,
         familyMemberName: String = "Self",
-        paymentMethod: String = "Card •••• 4242"
+        paymentMethod: String = "UPI / Card"
     ) {
         viewModelScope.launch {
             try {
@@ -354,11 +399,12 @@ class CarePulseViewModel(application: Application) : AndroidViewModel(applicatio
             try {
                 _uiState.update { it.copy(isLoading = true) }
                 repository.requestAmbulance(pickupAddress, emergencyType, ambulanceType, patientPhone)
+                val emsZone = if (HealthcareCatalog.isBiswanathArea(pickupAddress)) "Biswanath" else "Tezpur"
                 _uiState.update {
                     it.copy(
                         isLoading = false,
                         selectedTab = MainNavTab.EMERGENCY,
-                        feedbackMessage = "Emergency Ambulance dispatched! Tezpur EMS en route."
+                        feedbackMessage = "Emergency Ambulance dispatched! $emsZone 108 EMS en route."
                     )
                 }
             } catch (e: Exception) {
@@ -561,6 +607,78 @@ class CarePulseViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
+    fun addUserInsurancePolicy(policy: UserInsurancePolicy) {
+        viewModelScope.launch {
+            try {
+                val current = _uiState.value.userInsurancePolicies
+                val newPolicy = policy.copy(
+                    id = policy.id.ifBlank { "pol_${UUID.randomUUID().toString().take(8)}" }
+                )
+                val updatedList = listOf(newPolicy) + current
+                repository.saveUserInsurancePolicies(updatedList)
+                repository.createNotification(
+                    title = "Insurance Policy Added",
+                    message = "${newPolicy.insurerName} (${newPolicy.policyNumber}) saved to your Nidanmitra profile.",
+                    category = "PAYMENT"
+                )
+                _uiState.update {
+                    it.copy(
+                        userProfile = it.userProfile?.copy(insurancePolicies = updatedList),
+                        feedbackMessage = "Saved ${newPolicy.insurerName} policy to your profile"
+                    )
+                }
+            } catch (e: Exception) {
+                _uiState.update { it.copy(feedbackMessage = "Could not save policy: ${e.message}") }
+            }
+        }
+    }
+
+    fun deleteUserInsurancePolicy(policyId: String) {
+        viewModelScope.launch {
+            try {
+                val updatedList = _uiState.value.userInsurancePolicies.filterNot { it.id == policyId }
+                repository.saveUserInsurancePolicies(updatedList)
+                _uiState.update {
+                    it.copy(
+                        userProfile = it.userProfile?.copy(insurancePolicies = updatedList),
+                        feedbackMessage = "Insurance policy removed"
+                    )
+                }
+            } catch (e: Exception) {
+                _uiState.update { it.copy(feedbackMessage = "Could not remove policy: ${e.message}") }
+            }
+        }
+    }
+
+    fun submitInsuranceInquiry(
+        partnerName: String,
+        planName: String,
+        inquiryType: String,
+        coverageAmount: String,
+        membersInfo: String,
+        preferredPhone: String,
+        notes: String
+    ) {
+        viewModelScope.launch {
+            try {
+                repository.submitInsuranceInquiry(
+                    partnerName = partnerName,
+                    planName = planName,
+                    inquiryType = inquiryType,
+                    coverageAmount = coverageAmount,
+                    membersInfo = membersInfo,
+                    preferredPhone = preferredPhone,
+                    notes = notes
+                )
+                _uiState.update {
+                    it.copy(feedbackMessage = "Request sent to Nidanmitra Insurance Assistance for $partnerName!")
+                }
+            } catch (e: Exception) {
+                _uiState.update { it.copy(feedbackMessage = "Could not submit inquiry: ${e.message}") }
+            }
+        }
+    }
+
     fun addMedicalRecord(
         title: String,
         category: String,
@@ -595,15 +713,39 @@ class CarePulseViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
-    fun openConsultationChat(consultationId: String, doctorName: String, doctorId: String) {
+    fun openConsultationChat(
+        consultationId: String,
+        recipientName: String,
+        recipientId: String,
+        recipientSpecialty: String = "Specialist Consultation"
+    ) {
         _uiState.update {
             it.copy(
                 activeConsultationId = consultationId,
-                activeRecipientName = doctorName,
-                activeRecipientId = doctorId
+                activeRecipientName = recipientName,
+                activeRecipientId = recipientId,
+                activeRecipientSpecialty = recipientSpecialty
             )
         }
         observeChatMessages(consultationId)
+    }
+
+    fun openSupportDeskChat() {
+        openConsultationChat(
+            consultationId = HealthcareRepository.SUPPORT_DESK_CONSULTATION_ID,
+            recipientName = HealthcareRepository.SUPPORT_DESK_RECIPIENT_NAME,
+            recipientId = HealthcareRepository.SUPPORT_DESK_RECIPIENT_ID,
+            recipientSpecialty = "24/7 Tezpur & Biswanath Care Desk"
+        )
+    }
+
+    fun openInsuranceAssistanceChat() {
+        openConsultationChat(
+            consultationId = HealthcareRepository.INSURANCE_DESK_CONSULTATION_ID,
+            recipientName = HealthcareRepository.INSURANCE_DESK_RECIPIENT_NAME,
+            recipientId = HealthcareRepository.INSURANCE_DESK_RECIPIENT_ID,
+            recipientSpecialty = "Cashless TPA & Policy Advisors"
+        )
     }
 
     private fun observeChatMessages(consultationId: String) {
@@ -615,9 +757,24 @@ class CarePulseViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
-    fun sendChatMessage(message: String, messageType: String = "TEXT") {
-        if (message.isBlank()) return
+    fun sendChatMessage(
+        message: String,
+        messageType: String = "TEXT",
+        attachmentType: String = "",
+        attachmentPath: String = "",
+        attachmentName: String = "",
+        alsoSaveToLocker: Boolean = false
+    ) {
+        if (message.isBlank() && attachmentPath.isBlank()) return
         val current = _uiState.value
+        if (!current.canMessageRecipient(current.activeRecipientId)) {
+            _uiState.update {
+                it.copy(
+                    feedbackMessage = "Book an appointment with ${current.activeRecipientName} to unlock direct messaging."
+                )
+            }
+            return
+        }
         viewModelScope.launch {
             try {
                 repository.sendChatMessage(
@@ -625,11 +782,44 @@ class CarePulseViewModel(application: Application) : AndroidViewModel(applicatio
                     recipientId = current.activeRecipientId,
                     recipientName = current.activeRecipientName,
                     message = message,
-                    messageType = messageType
+                    messageType = messageType,
+                    attachmentType = attachmentType,
+                    attachmentPath = attachmentPath,
+                    attachmentName = attachmentName
                 )
+                if (alsoSaveToLocker && attachmentPath.isNotBlank()) {
+                    val today = SimpleDateFormat("dd MMM yyyy", Locale.getDefault()).format(Date())
+                    repository.addMedicalRecord(
+                        MedicalRecord(
+                            memberName = "Self",
+                            title = attachmentName.substringBeforeLast(".").ifBlank { "Shared Prescription" },
+                            category = "PRESCRIPTION",
+                            doctorOrFacility = current.activeRecipientName,
+                            recordDate = today,
+                            summary = message.ifBlank { "Shared via consultation chat with ${current.activeRecipientName}" },
+                            keyMetrics = "",
+                            fileType = attachmentType.ifBlank { "IMAGE" },
+                            attachmentPath = attachmentPath,
+                            attachmentName = attachmentName
+                        )
+                    )
+                    _uiState.update {
+                        it.copy(feedbackMessage = "Prescription sent and saved to Health Locker")
+                    }
+                }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 _uiState.update { it.copy(feedbackMessage = "Could not send message: ${e.message}") }
             }
+        }
+    }
+
+    fun notifyBookingRequiredForChat(doctorName: String) {
+        _uiState.update {
+            it.copy(
+                feedbackMessage = "Book an appointment with $doctorName first to message them directly."
+            )
         }
     }
 

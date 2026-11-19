@@ -56,6 +56,7 @@ import androidx.compose.ui.unit.dp
 import com.example.data.model.DiagnosticBooking
 import com.example.data.model.MedicalRecord
 import com.example.data.model.ProcedureGuide
+import com.example.ui.i18n.LocalAppStrings
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -66,8 +67,12 @@ fun PatientRecordsTab(
     onAddRecord: () -> Unit,
     onSelectProcedure: (ProcedureGuide) -> Unit
 ) {
+    val strings = LocalAppStrings.current
     var selectedSection by remember { mutableIntStateOf(0) }
-    val sections = listOf("Health Locker", "Procedure Guides")
+    val sections = listOf(
+        "health_locker" to strings.healthLockerTab,
+        "procedure_guides" to strings.procedureGuidesTab
+    )
 
     Box(
         modifier = Modifier
@@ -79,7 +84,7 @@ fun PatientRecordsTab(
                 selectedTabIndex = selectedSection,
                 modifier = Modifier.fillMaxWidth()
             ) {
-                sections.forEachIndexed { index, title ->
+                sections.forEachIndexed { index, (tagKey, title) ->
                     Tab(
                         selected = selectedSection == index,
                         onClick = { selectedSection = index },
@@ -89,7 +94,7 @@ fun PatientRecordsTab(
                                 fontWeight = if (selectedSection == index) FontWeight.Bold else FontWeight.Normal
                             )
                         },
-                        modifier = Modifier.testTag("records_subtab_${title.lowercase().replace(" ", "_")}")
+                        modifier = Modifier.testTag("records_subtab_$tagKey")
                     )
                 }
             }
@@ -131,6 +136,7 @@ private fun HealthLockerSection(
     onAddRecord: () -> Unit
 ) {
     val context = LocalContext.current
+    val strings = LocalAppStrings.current
     var selectedCategory by remember { mutableStateOf("All") }
     var viewingRecord by remember { mutableStateOf<MedicalRecord?>(null) }
     val categories = listOf("All", "PRESCRIPTION", "LAB_REPORT", "RADIOLOGY", "VITALS")
@@ -155,13 +161,13 @@ private fun HealthLockerSection(
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text(
-                        text = "Scan & Store Health Records",
+                        text = strings.scanStoreTitle,
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.primary
                     )
                     Text(
-                        text = "Snap a photo or upload PDFs of prescriptions, lab reports, and scans—no manual typing required.",
+                        text = strings.scanStoreSubtitle,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -174,7 +180,7 @@ private fun HealthLockerSection(
                     ) {
                         Icon(imageVector = Icons.Default.CameraAlt, contentDescription = null)
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("Scan or Upload Prescription / Report")
+                        Text(strings.scanUploadButton)
                     }
                 }
             }

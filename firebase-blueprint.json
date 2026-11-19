@@ -17,6 +17,8 @@
         "emergencyContactPhone": { "type": "string" },
         "locationArea": { "type": "string" },
         "savedAddress": { "type": "string" },
+        "onboardingCompleted": { "type": "boolean" },
+        "insurancePolicies": { "type": "array" },
         "createdAt": { "type": "timestamp" },
         "updatedAt": { "type": "timestamp" }
       }
@@ -200,6 +202,8 @@
         "summary": { "type": "string" },
         "keyMetrics": { "type": "string" },
         "fileType": { "type": "string" },
+        "attachmentPath": { "type": "string" },
+        "attachmentName": { "type": "string" },
         "createdAt": { "type": "timestamp" },
         "updatedAt": { "type": "timestamp" }
       }
@@ -216,6 +220,9 @@
         "message": { "type": "string" },
         "isRead": { "type": "boolean" },
         "messageType": { "type": "string" },
+        "attachmentType": { "type": "string" },
+        "attachmentPath": { "type": "string" },
+        "attachmentName": { "type": "string" },
         "createdAt": { "type": "timestamp" }
       }
     }

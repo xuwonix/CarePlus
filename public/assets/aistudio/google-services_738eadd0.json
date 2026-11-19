@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "462649574616",
+    "project_id": "nidanmitra-cacab",
+    "storage_bucket": "nidanmitra-cacab.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:462649574616:android:557c98e9b9714658e383ad",
+        "android_client_info": {
+          "package_name": "com.nidanmitra.xuw"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "462649574616-nhg3dsm9h1s2fhf9q6gq73v5v589gp43.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCsxzdjb3T3S6zghO4MDvCnHqA_IsB5_3g"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "462649574616-nhg3dsm9h1s2fhf9q6gq73v5v589gp43.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

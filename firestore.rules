@@ -10,9 +10,9 @@ service cloud.firestore {
       return isAuthenticated() && request.auth.uid == userId;
     }
 
-    // Users collection
+    // Users collection (strictly owner-scoped for patient privacy)
     match /users/{userId} {
-      allow read: if isAuthenticated();
+      allow read: if isOwner(userId);
       allow write: if isOwner(userId);
     }
 
@@ -179,11 +179,14 @@ service cloud.firestore {
     function isValidMedicalRecord(data) {
       return data.patientId is string &&
              data.title is string &&
+             data.title.size() > 0 &&
              data.category is string &&
-             data.recordDate is string;
+             data.recordDate is string &&
+             (!('attachmentPath' in data) || (data.attachmentPath is string && data.attachmentPath.size() <= 1024)) &&
+             (!('attachmentName' in data) || (data.attachmentName is string && data.attachmentName.size() <= 256));
     }
 
-    // Secure consultation chat messages
+    // Secure consultation chat messages (with optional prescription attachments)
     match /chat_messages/{messageId} {
       allow read: if isAuthenticated() && (
         resource.data.senderId == request.auth.uid ||
@@ -201,9 +204,17 @@ service cloud.firestore {
 
     function isValidChatMessage(data) {
       return data.consultationId is string &&
+             data.consultationId.size() > 0 &&
+             data.consultationId.size() <= 120 &&
              data.senderId is string &&
              data.recipientId is string &&
-             data.message is string;
+             data.recipientId.size() > 0 &&
+             data.message is string &&
+             data.message.size() <= 4000 &&
+             (!('attachmentType' in data) || (data.attachmentType is string && data.attachmentType in ['', 'IMAGE', 'PDF'])) &&
+             (!('attachmentPath' in data) || (data.attachmentPath is string && data.attachmentPath.size() <= 1024)) &&
+             (!('attachmentName' in data) || (data.attachmentName is string && data.attachmentName.size() <= 256)) &&
+             (data.message.size() > 0 || ('attachmentPath' in data && data.attachmentPath.size() > 0));
     }
   }
 }

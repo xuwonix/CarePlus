@@ -1,6 +1,6 @@
 {
-  "name": "Nidanmita",
-  "description": "Tezpur healthcare companion connecting patients with local specialists, emergency ambulance, diagnostic labs, health insurance, procedure guides, and secure consultation messaging.",
+  "name": "Nidanmitra",
+  "description": "Tezpur & Biswanath Chariali healthcare companion connecting patients with local specialists, emergency ambulance, diagnostic labs, health insurance partners, procedure guides, and secure consultation messaging.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

@@ -75,7 +75,7 @@ fun HelpSupportScreen(
             ),
             FaqItem(
                 "What happens when I press Emergency Alert?",
-                "Nidanmita immediately dispatches the closest ICU/Cardiac or Basic Medical ambulance unit in Tezpur and shares live ETA and responder contact details."
+                "Nidanmitra immediately dispatches the closest ICU/Cardiac or Basic Medical ambulance unit in Tezpur or Biswanath Chariali and shares live ETA and responder contact details."
             )
         )
     }
@@ -134,7 +134,7 @@ fun HelpSupportScreen(
                             Icon(Icons.Default.Phone, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
-                                text = "108 / +91 1800-108-4455 • support@nidanmita.in",
+                                text = "108 / +91 1800-108-4455 • support@nidanmitra.in",
                                 style = MaterialTheme.typography.bodyMedium,
                                 fontWeight = FontWeight.SemiBold
                             )

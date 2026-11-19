@@ -33,8 +33,10 @@ import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.FolderShared
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Person
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
+import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -49,10 +51,12 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -80,23 +84,30 @@ import com.example.data.model.DiagnosticCenter
 import com.example.data.model.DiagnosticTest
 import com.example.data.model.HomeCareBooking
 import com.example.data.model.HomeCareService
+import com.example.data.model.InsurancePartner
 import com.example.data.model.NearbyFacility
 import com.example.data.model.ProcedureGuide
 import com.example.data.model.Specialist
+import com.example.data.model.UserInsurancePolicy
 import com.example.data.model.UserProfile
+import com.example.data.repository.HealthcareCatalog
+import com.example.data.repository.HealthcareRepository
 import com.example.ui.screens.auth.AuthScreen
 import com.example.ui.screens.auth.appSignOut
 import com.example.ui.screens.chat.ChatConsultationScreen
 import com.example.ui.screens.patient.AddFamilyMemberModal
+import com.example.ui.screens.patient.AddInsurancePolicyModal
 import com.example.ui.screens.patient.AddMedicalRecordModal
 import com.example.ui.screens.patient.AmbulanceDispatchModal
 import com.example.ui.screens.patient.BookDiagnosticModal
 import com.example.ui.screens.patient.BookHomeCareModal
 import com.example.ui.screens.patient.BookSpecialistModal
+import com.example.ui.screens.patient.BuyInsuranceInquiryModal
 import com.example.ui.screens.patient.DoctorProfileScreen
 import com.example.ui.screens.patient.EditPatientProfileModal
 import com.example.ui.screens.patient.FacilityDetailScreen
 import com.example.ui.screens.patient.HelpSupportScreen
+import com.example.ui.screens.patient.InsuranceHubScreen
 import com.example.ui.screens.patient.LocationPickerModal
 import com.example.ui.screens.patient.NotificationsScreen
 import com.example.ui.screens.patient.PatientBookingTab
@@ -111,11 +122,18 @@ import com.example.ui.screens.procedures.ProcedureDetailScreen
 import com.example.ui.theme.CarePulseTheme
 import com.example.ui.theme.EmergencyRed
 import com.example.ui.theme.EmergencyRedContainer
+import com.example.ui.i18n.AppLanguage
+import com.example.ui.i18n.LanguagePreferences
+import com.example.ui.i18n.LanguageSelectorButton
+import com.example.ui.i18n.LocalAppLanguage
+import com.example.ui.i18n.LocalAppStrings
+import com.example.ui.i18n.stringsForLanguage
 import com.example.ui.viewmodel.CarePulseViewModel
 import com.example.ui.viewmodel.MainNavTab
 import com.google.firebase.Firebase
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.auth
+import kotlinx.coroutines.launch
 
 private sealed class RescheduleTarget {
     data class DoctorAppt(val appointment: Appointment) : RescheduleTarget()
@@ -137,7 +155,14 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun CarePulseRootApp() {
+    val context = LocalContext.current
     var currentUser by remember { mutableStateOf(Firebase.auth.currentUser) }
+    var selectedLanguage by remember { mutableStateOf(LanguagePreferences.load(context)) }
+
+    val onSelectLanguage: (AppLanguage) -> Unit = { lang ->
+        selectedLanguage = lang
+        LanguagePreferences.save(context, lang)
+    }
 
     DisposableEffect(Unit) {
         val listener = FirebaseAuth.AuthStateListener { auth ->
@@ -149,22 +174,31 @@ fun CarePulseRootApp() {
         }
     }
 
-    if (currentUser == null) {
-        AuthScreen(
-            onAuthSuccess = {
-                currentUser = Firebase.auth.currentUser
-            }
-        )
-    } else {
-        val uid = currentUser!!.uid
-        key(uid) {
-            val viewModel: CarePulseViewModel = viewModel()
-            PatientMainApp(
-                viewModel = viewModel,
-                onSignOutRequested = {
-                    currentUser = null
+    CompositionLocalProvider(
+        LocalAppLanguage provides selectedLanguage,
+        LocalAppStrings provides stringsForLanguage(selectedLanguage)
+    ) {
+        if (currentUser == null) {
+            AuthScreen(
+                selectedLanguage = selectedLanguage,
+                onSelectLanguage = onSelectLanguage,
+                onAuthSuccess = {
+                    currentUser = Firebase.auth.currentUser
                 }
             )
+        } else {
+            val uid = currentUser!!.uid
+            key(uid) {
+                val viewModel: CarePulseViewModel = viewModel(key = uid)
+                PatientMainApp(
+                    viewModel = viewModel,
+                    selectedLanguage = selectedLanguage,
+                    onSelectLanguage = onSelectLanguage,
+                    onSignOutRequested = {
+                        currentUser = null
+                    }
+                )
+            }
         }
     }
 }
@@ -173,9 +207,12 @@ fun CarePulseRootApp() {
 @Composable
 fun PatientMainApp(
     viewModel: CarePulseViewModel,
+    selectedLanguage: AppLanguage,
+    onSelectLanguage: (AppLanguage) -> Unit,
     onSignOutRequested: () -> Unit
 ) {
     val context = LocalContext.current
+    val strings = LocalAppStrings.current
     val coroutineScope = rememberCoroutineScope()
     val credentialManager = remember { CredentialManager.create(context) }
     val uiState by viewModel.uiState.collectAsState()
@@ -188,6 +225,8 @@ fun PatientMainApp(
     var activeFacilityDetail by remember { mutableStateOf<NearbyFacility?>(null) }
     var showNotificationsScreen by remember { mutableStateOf(false) }
     var showHelpSupportScreen by remember { mutableStateOf(false) }
+    var showInsuranceHubScreen by remember { mutableStateOf(false) }
+    var insuranceHubInitialTab by remember { mutableStateOf(0) }
 
     // Modals
     var showAmbulanceModal by remember { mutableStateOf(false) }
@@ -196,10 +235,31 @@ fun PatientMainApp(
     var bookingHomeCare by remember { mutableStateOf<HomeCareService?>(null) }
     var rescheduleTarget by remember { mutableStateOf<RescheduleTarget?>(null) }
     var showClaimModal by remember { mutableStateOf(false) }
+    var claimPreselectedPolicy by remember { mutableStateOf<UserInsurancePolicy?>(null) }
+    var showAddPolicyModal by remember { mutableStateOf(false) }
+    var showBuyInquiryModal by remember { mutableStateOf(false) }
+    var buyInquiryPartner by remember { mutableStateOf<InsurancePartner?>(null) }
     var showAddRecordModal by remember { mutableStateOf(false) }
     var showEditProfileModal by remember { mutableStateOf(false) }
     var showAddFamilyMemberModal by remember { mutableStateOf(false) }
     var showLocationPickerModal by remember { mutableStateOf(false) }
+    var lockedChatDoctor by remember { mutableStateOf<Specialist?>(null) }
+
+    fun openDoctorChatIfBooked(doctorName: String, doctorId: String) {
+        if (uiState.canMessageRecipient(doctorId)) {
+            val spec = uiState.specialists.firstOrNull { it.id == doctorId }?.specialty ?: "Specialist Consultation"
+            viewModel.openConsultationChat("consult_$doctorId", doctorName, doctorId, spec)
+            activeDoctorProfile = null
+            activeChatScreen = true
+        } else {
+            val found = uiState.specialists.firstOrNull { it.id == doctorId }
+            if (found != null) {
+                lockedChatDoctor = found
+            } else {
+                viewModel.notifyBookingRequiredForChat(doctorName)
+            }
+        }
+    }
 
     LaunchedEffect(uiState.feedbackMessage) {
         uiState.feedbackMessage?.let { msg ->
@@ -241,10 +301,31 @@ fun PatientMainApp(
         }
 
         activeChatScreen -> {
+            val isSupport = uiState.activeRecipientId == HealthcareRepository.SUPPORT_DESK_RECIPIENT_ID
+            val isInsurance = uiState.activeRecipientId == HealthcareRepository.INSURANCE_DESK_RECIPIENT_ID
+            val activeDoctorObj = uiState.specialists.firstOrNull { it.id == uiState.activeRecipientId }
             ChatConsultationScreen(
                 recipientName = uiState.activeRecipientName,
+                recipientSpecialty = uiState.activeRecipientSpecialty,
+                canSendMessages = uiState.canMessageRecipient(uiState.activeRecipientId),
+                isSupportChat = isSupport,
+                isInsuranceChat = isInsurance,
                 messages = uiState.currentChatMessages,
-                onSendMessage = { msg -> viewModel.sendChatMessage(msg) },
+                savedLockerRecords = uiState.medicalRecords,
+                onSendMessage = { msg, attachType, attachPath, attachName, saveToLocker ->
+                    viewModel.sendChatMessage(
+                        message = msg,
+                        attachmentType = attachType,
+                        attachmentPath = attachPath,
+                        attachmentName = attachName,
+                        alsoSaveToLocker = saveToLocker
+                    )
+                },
+                onBookDoctor = activeDoctorObj?.let { doc ->
+                    {
+                        bookingSpecialist = doc
+                    }
+                },
                 onBack = { activeChatScreen = false }
             )
         }
@@ -253,13 +334,11 @@ fun PatientMainApp(
             val doc = activeDoctorProfile!!
             DoctorProfileScreen(
                 specialist = doc,
+                isBooked = uiState.hasBookedDoctor(doc.id),
                 reviews = uiState.reviews,
                 onBookAppointment = { bookingSpecialist = doc },
-                onOpenChat = {
-                    viewModel.openConsultationChat("consult_${doc.id}", doc.name, doc.id)
-                    activeDoctorProfile = null
-                    activeChatScreen = true
-                },
+                onOpenChat = { openDoctorChatIfBooked(doc.name, doc.id) },
+                onLockedChatAttempt = { lockedChatDoctor = doc },
                 onSubmitReview = { rating, comment ->
                     viewModel.submitReview(doc.id, doc.name, "DOCTOR", rating, comment)
                 },
@@ -302,11 +381,43 @@ fun PatientMainApp(
                 tickets = uiState.supportTickets,
                 onSubmitTicket = { cat, subj, desc -> viewModel.submitSupportTicket(cat, subj, desc) },
                 onOpenCareChat = {
-                    viewModel.openConsultationChat("consult_doc_cardio_1", "Care Support Desk", "doc_cardio_1")
+                    viewModel.openSupportDeskChat()
                     showHelpSupportScreen = false
                     activeChatScreen = true
                 },
                 onBack = { showHelpSupportScreen = false }
+            )
+        }
+
+        showInsuranceHubScreen -> {
+            val insuranceTickets = uiState.supportTickets.filter {
+                it.category.contains("Insurance", ignoreCase = true)
+            }
+            InsuranceHubScreen(
+                initialTab = insuranceHubInitialTab,
+                userPolicies = uiState.userInsurancePolicies,
+                claims = uiState.patientInsuranceClaims,
+                partners = uiState.insurancePartners,
+                insuranceTickets = insuranceTickets,
+                onAddPolicy = { showAddPolicyModal = true },
+                onDeletePolicy = { viewModel.deleteUserInsurancePolicy(it) },
+                onFileClaimForPolicy = { policy ->
+                    claimPreselectedPolicy = policy
+                    showClaimModal = true
+                },
+                onBuyPartnerPlan = { partner ->
+                    buyInquiryPartner = partner
+                    showBuyInquiryModal = true
+                },
+                onRequestGeneralCallback = {
+                    buyInquiryPartner = null
+                    showBuyInquiryModal = true
+                },
+                onOpenInsuranceChat = {
+                    viewModel.openInsuranceAssistanceChat()
+                    activeChatScreen = true
+                },
+                onBack = { showInsuranceHubScreen = false }
             )
         }
 
@@ -332,7 +443,7 @@ fun PatientMainApp(
                                             .testTag("top_bar_location_button")
                                     ) {
                                         Text(
-                                            text = "Nidanmita",
+                                            text = strings.appName,
                                             style = MaterialTheme.typography.titleLarge,
                                             fontWeight = FontWeight.ExtraBold,
                                             color = MaterialTheme.colorScheme.primary
@@ -354,6 +465,17 @@ fun PatientMainApp(
                                 }
                             },
                             actions = {
+                                LanguageSelectorButton(
+                                    selectedLanguage = selectedLanguage,
+                                    onSelectLanguage = { lang ->
+                                        onSelectLanguage(lang)
+                                        coroutineScope.launch {
+                                            snackbarHostState.showSnackbar(
+                                                stringsForLanguage(lang).languageChangedToast(lang)
+                                            )
+                                        }
+                                    }
+                                )
                                 IconButton(
                                     onClick = { showNotificationsScreen = true },
                                     modifier = Modifier
@@ -371,7 +493,7 @@ fun PatientMainApp(
                                     ) {
                                         Icon(
                                             imageVector = Icons.Default.Notifications,
-                                            contentDescription = "Notifications",
+                                            contentDescription = strings.notificationsLabel,
                                             tint = MaterialTheme.colorScheme.onSurface
                                         )
                                     }
@@ -384,7 +506,7 @@ fun PatientMainApp(
                                 ) {
                                     Icon(
                                         imageVector = Icons.Filled.Emergency,
-                                        contentDescription = "Quick Emergency SOS",
+                                        contentDescription = strings.navEmergency,
                                         tint = EmergencyRed
                                     )
                                 }
@@ -438,10 +560,16 @@ fun PatientMainApp(
                                             bookingDiagnostic = Pair(center, test)
                                         },
                                         onOpenChatWithDoctor = { doctorName, doctorId ->
-                                            viewModel.openConsultationChat("consult_$doctorId", doctorName, doctorId)
-                                            activeChatScreen = true
+                                            openDoctorChatIfBooked(doctorName, doctorId)
+                                        },
+                                        onLockedChatAttempt = { specialist ->
+                                            lockedChatDoctor = specialist
                                         },
                                         onSelectProcedure = { activeProcedureScreen = it },
+                                        onOpenInsuranceHub = {
+                                            insuranceHubInitialTab = 0
+                                            showInsuranceHubScreen = true
+                                        },
                                         onQuickEmergencySos = {
                                             viewModel.selectMainTab(MainNavTab.EMERGENCY)
                                         }
@@ -472,8 +600,10 @@ fun PatientMainApp(
                                         },
                                         onCancelHomeCare = { viewModel.cancelHomeCare(it) },
                                         onOpenChatWithDoctor = { doctorName, doctorId ->
-                                            viewModel.openConsultationChat("consult_$doctorId", doctorName, doctorId)
-                                            activeChatScreen = true
+                                            openDoctorChatIfBooked(doctorName, doctorId)
+                                        },
+                                        onLockedChatAttempt = { specialist ->
+                                            lockedChatDoctor = specialist
                                         }
                                     )
                                 }
@@ -508,19 +638,25 @@ fun PatientMainApp(
                                         profile = uiState.userProfile,
                                         familyMembers = uiState.familyMembers,
                                         paymentRecords = uiState.paymentRecords,
+                                        userPolicies = uiState.userInsurancePolicies,
+                                        tiedUpInsurerCount = uiState.insurancePartners.size,
                                         claims = uiState.patientInsuranceClaims,
                                         onEditProfile = { showEditProfileModal = true },
                                         onOpenLocationPicker = { showLocationPickerModal = true },
                                         onAddFamilyMember = { showAddFamilyMemberModal = true },
                                         onDeleteFamilyMember = { viewModel.deleteFamilyMember(it) },
-                                        onSubmitClaim = { showClaimModal = true },
+                                        onOpenInsuranceHub = { tabIndex ->
+                                            insuranceHubInitialTab = tabIndex
+                                            showInsuranceHubScreen = true
+                                        },
+                                        onAddInsurancePolicy = { showAddPolicyModal = true },
+                                        onSubmitClaim = { policy ->
+                                            claimPreselectedPolicy = policy
+                                            showClaimModal = true
+                                        },
                                         onOpenHelpSupport = { showHelpSupportScreen = true },
                                         onOpenSupportChat = {
-                                            viewModel.openConsultationChat(
-                                                "consult_doc_cardio_1",
-                                                "Dr. Ananya Baruah, MD, DM",
-                                                "doc_cardio_1"
-                                            )
+                                            viewModel.openSupportDeskChat()
                                             activeChatScreen = true
                                         },
                                         onSignOut = {
@@ -555,7 +691,7 @@ fun PatientMainApp(
     // Patient Modals
     if (showAmbulanceModal) {
         AmbulanceDispatchModal(
-            defaultAddress = uiState.userProfile?.savedAddress ?: "",
+            defaultAddress = uiState.userProfile?.savedAddress?.ifBlank { uiState.selectedLocationArea } ?: uiState.selectedLocationArea,
             defaultPhone = uiState.userProfile?.phone ?: "",
             onDismiss = { showAmbulanceModal = false },
             onConfirm = { pickup, emergencyType, ambulanceType, phone ->
@@ -628,11 +764,56 @@ fun PatientMainApp(
     }
 
     if (showClaimModal) {
+        val defaultHospital = if (HealthcareCatalog.isBiswanathArea(uiState.selectedLocationArea)) {
+            "Pragati Hospital & Research Centre, Biswanath"
+        } else {
+            "Baptist Christian Hospital, Tezpur"
+        }
         SubmitInsuranceClaimModal(
-            onDismiss = { showClaimModal = false },
+            userPolicies = uiState.userInsurancePolicies,
+            preselectedPolicy = claimPreselectedPolicy,
+            defaultHospital = defaultHospital,
+            onDismiss = {
+                showClaimModal = false
+                claimPreselectedPolicy = null
+            },
             onConfirm = { policy, provider, hospital, procedure, amount, claimType, docRef ->
                 viewModel.submitInsuranceClaim(policy, provider, hospital, procedure, amount, claimType, docRef)
                 showClaimModal = false
+                claimPreselectedPolicy = null
+            }
+        )
+    }
+
+    if (showAddPolicyModal) {
+        val defaultMembers = if (uiState.familyMembers.isEmpty()) {
+            "Self"
+        } else {
+            "Self + ${uiState.familyMembers.size} family member(s)"
+        }
+        AddInsurancePolicyModal(
+            defaultMembers = defaultMembers,
+            onDismiss = { showAddPolicyModal = false },
+            onConfirm = { newPolicy ->
+                viewModel.addUserInsurancePolicy(newPolicy)
+                showAddPolicyModal = false
+            }
+        )
+    }
+
+    if (showBuyInquiryModal) {
+        BuyInsuranceInquiryModal(
+            partner = buyInquiryPartner,
+            defaultPhone = uiState.userProfile?.phone ?: "",
+            defaultLocation = uiState.selectedLocationArea,
+            onDismiss = {
+                showBuyInquiryModal = false
+                buyInquiryPartner = null
+            },
+            onConfirm = { partnerName, planName, inquiryType, cover, members, phone, notes ->
+                viewModel.submitInsuranceInquiry(partnerName, planName, inquiryType, cover, members, phone, notes)
+                showBuyInquiryModal = false
+                buyInquiryPartner = null
             }
         )
     }
@@ -691,6 +872,40 @@ fun PatientMainApp(
             }
         )
     }
+
+    lockedChatDoctor?.let { doc ->
+        AlertDialog(
+            onDismissRequest = { lockedChatDoctor = null },
+            title = {
+                Text(
+                    text = "Book Appointment to Message",
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Text(
+                    text = "To prevent doctor inbox overflow and keep clinical care organized, only booked patients can directly message ${doc.name} and share prescriptions. Book a consultation slot to unlock chat immediately."
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val target = doc
+                        lockedChatDoctor = null
+                        bookingSpecialist = target
+                    },
+                    modifier = Modifier.testTag("locked_chat_book_now_button")
+                ) {
+                    Text("Book Appointment")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { lockedChatDoctor = null }) {
+                    Text("Close")
+                }
+            }
+        )
+    }
 }
 
 @Composable
@@ -698,6 +913,7 @@ private fun PatientBottomNavigationBar(
     selectedTab: MainNavTab,
     onSelectTab: (MainNavTab) -> Unit
 ) {
+    val strings = LocalAppStrings.current
     NavigationBar(
         containerColor = MaterialTheme.colorScheme.surface,
         tonalElevation = 4.dp,
@@ -710,10 +926,10 @@ private fun PatientBottomNavigationBar(
             icon = {
                 Icon(
                     imageVector = if (selectedTab == MainNavTab.HOME) Icons.Filled.Home else Icons.Outlined.Home,
-                    contentDescription = "Home"
+                    contentDescription = strings.navHome
                 )
             },
-            label = { Text("Home", maxLines = 1) },
+            label = { Text(strings.navHome, maxLines = 1) },
             modifier = Modifier.testTag("nav_tab_home")
         )
 
@@ -723,10 +939,10 @@ private fun PatientBottomNavigationBar(
             icon = {
                 Icon(
                     imageVector = if (selectedTab == MainNavTab.BOOKING) Icons.Filled.CalendarMonth else Icons.Outlined.CalendarMonth,
-                    contentDescription = "Booking"
+                    contentDescription = strings.navBooking
                 )
             },
-            label = { Text("Booking", maxLines = 1) },
+            label = { Text(strings.navBooking, maxLines = 1) },
             modifier = Modifier.testTag("nav_tab_booking")
         )
 
@@ -744,7 +960,7 @@ private fun PatientBottomNavigationBar(
                 ) {
                     Icon(
                         imageVector = Icons.Filled.Emergency,
-                        contentDescription = "Emergency Alert",
+                        contentDescription = strings.navEmergency,
                         tint = if (emergencySelected) Color.White else EmergencyRed,
                         modifier = Modifier.size(24.dp)
                     )
@@ -753,7 +969,7 @@ private fun PatientBottomNavigationBar(
             label = null,
             modifier = Modifier
                 .minimumInteractiveComponentSize()
-                .semantics { contentDescription = "Emergency Alert" }
+                .semantics { contentDescription = strings.navEmergency }
                 .testTag("nav_tab_emergency")
         )
 
@@ -763,10 +979,10 @@ private fun PatientBottomNavigationBar(
             icon = {
                 Icon(
                     imageVector = if (selectedTab == MainNavTab.RECORDS) Icons.Filled.FolderShared else Icons.Outlined.FolderShared,
-                    contentDescription = "Records"
+                    contentDescription = strings.navRecords
                 )
             },
-            label = { Text("Records", maxLines = 1) },
+            label = { Text(strings.navRecords, maxLines = 1) },
             modifier = Modifier.testTag("nav_tab_records")
         )
 
@@ -776,10 +992,10 @@ private fun PatientBottomNavigationBar(
             icon = {
                 Icon(
                     imageVector = if (selectedTab == MainNavTab.PROFILE) Icons.Filled.Person else Icons.Outlined.Person,
-                    contentDescription = "Profile"
+                    contentDescription = strings.navProfile
                 )
             },
-            label = { Text("Profile", maxLines = 1) },
+            label = { Text(strings.navProfile, maxLines = 1) },
             modifier = Modifier.testTag("nav_tab_profile")
         )
     }
@@ -790,6 +1006,7 @@ private fun PatientNavigationRail(
     selectedTab: MainNavTab,
     onSelectTab: (MainNavTab) -> Unit
 ) {
+    val strings = LocalAppStrings.current
     NavigationRail(
         containerColor = MaterialTheme.colorScheme.surface,
         modifier = Modifier.windowInsetsPadding(WindowInsets.navigationBars)
@@ -797,14 +1014,14 @@ private fun PatientNavigationRail(
         NavigationRailItem(
             selected = selectedTab == MainNavTab.HOME,
             onClick = { onSelectTab(MainNavTab.HOME) },
-            icon = { Icon(if (selectedTab == MainNavTab.HOME) Icons.Filled.Home else Icons.Outlined.Home, "Home") },
-            label = { Text("Home") }
+            icon = { Icon(if (selectedTab == MainNavTab.HOME) Icons.Filled.Home else Icons.Outlined.Home, strings.navHome) },
+            label = { Text(strings.navHome) }
         )
         NavigationRailItem(
             selected = selectedTab == MainNavTab.BOOKING,
             onClick = { onSelectTab(MainNavTab.BOOKING) },
-            icon = { Icon(if (selectedTab == MainNavTab.BOOKING) Icons.Filled.CalendarMonth else Icons.Outlined.CalendarMonth, "Booking") },
-            label = { Text("Booking") }
+            icon = { Icon(if (selectedTab == MainNavTab.BOOKING) Icons.Filled.CalendarMonth else Icons.Outlined.CalendarMonth, strings.navBooking) },
+            label = { Text(strings.navBooking) }
         )
         val emergencySelected = selectedTab == MainNavTab.EMERGENCY
         NavigationRailItem(
@@ -820,7 +1037,7 @@ private fun PatientNavigationRail(
                 ) {
                     Icon(
                         imageVector = Icons.Filled.Emergency,
-                        contentDescription = "Emergency Alert",
+                        contentDescription = strings.navEmergency,
                         tint = if (emergencySelected) Color.White else EmergencyRed
                     )
                 }
@@ -829,14 +1046,14 @@ private fun PatientNavigationRail(
         NavigationRailItem(
             selected = selectedTab == MainNavTab.RECORDS,
             onClick = { onSelectTab(MainNavTab.RECORDS) },
-            icon = { Icon(if (selectedTab == MainNavTab.RECORDS) Icons.Filled.FolderShared else Icons.Outlined.FolderShared, "Records") },
-            label = { Text("Records") }
+            icon = { Icon(if (selectedTab == MainNavTab.RECORDS) Icons.Filled.FolderShared else Icons.Outlined.FolderShared, strings.navRecords) },
+            label = { Text(strings.navRecords) }
         )
         NavigationRailItem(
             selected = selectedTab == MainNavTab.PROFILE,
             onClick = { onSelectTab(MainNavTab.PROFILE) },
-            icon = { Icon(if (selectedTab == MainNavTab.PROFILE) Icons.Filled.Person else Icons.Outlined.Person, "Profile") },
-            label = { Text("Profile") }
+            icon = { Icon(if (selectedTab == MainNavTab.PROFILE) Icons.Filled.Person else Icons.Outlined.Person, strings.navProfile) },
+            label = { Text(strings.navProfile) }
         )
     }
 }

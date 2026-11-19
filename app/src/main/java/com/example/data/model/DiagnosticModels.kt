@@ -1,5 +1,6 @@
 package com.example.data.model
 
+import androidx.annotation.Keep
 import com.google.firebase.Timestamp
 import com.google.firebase.firestore.DocumentId
 import com.google.firebase.firestore.IgnoreExtraProperties
@@ -27,6 +28,7 @@ data class DiagnosticCenter(
     val testsOffered: List<DiagnosticTest>
 )
 
+@Keep
 @IgnoreExtraProperties
 data class DiagnosticBooking(
     @DocumentId val id: String = "",
@@ -47,7 +49,7 @@ data class DiagnosticBooking(
     val abnormalFlag: Boolean = false,
     val cost: Double = 0.0,
     val paymentStatus: String = "PAID",
-    val paymentMethod: String = "Card •••• 4242",
+    val paymentMethod: String = "UPI / Card",
     @ServerTimestamp val createdAt: Timestamp? = null,
     @ServerTimestamp val updatedAt: Timestamp? = null
 )

@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -62,6 +63,10 @@ import androidx.credentials.CustomCredential
 import androidx.credentials.GetCredentialRequest
 import androidx.credentials.exceptions.GetCredentialCancellationException
 import com.example.R
+import com.example.ui.i18n.AppLanguage
+import com.example.ui.i18n.LanguageSelectorButton
+import com.example.ui.i18n.LocalAppLanguage
+import com.example.ui.i18n.LocalAppStrings
 import com.google.android.libraries.identity.googleid.GetGoogleIdOption
 import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
@@ -78,9 +83,12 @@ import kotlinx.coroutines.withContext
 
 @Composable
 fun AuthScreen(
+    selectedLanguage: AppLanguage = LocalAppLanguage.current,
+    onSelectLanguage: (AppLanguage) -> Unit = {},
     onAuthSuccess: () -> Unit
 ) {
     val context = LocalContext.current
+    val strings = LocalAppStrings.current
     val coroutineScope = rememberCoroutineScope()
     val credentialManager = remember { CredentialManager.create(context) }
     var isLoading by remember { mutableStateOf(false) }
@@ -104,66 +112,68 @@ fun AuthScreen(
         modifier = Modifier.fillMaxSize(),
         color = MaterialTheme.colorScheme.background
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .padding(24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
-        ) {
-            Spacer(modifier = Modifier.height(32.dp))
-
-            // App Emblem
-            Box(
+        Box(modifier = Modifier.fillMaxSize()) {
+            Column(
                 modifier = Modifier
-                    .size(96.dp)
-                    .clip(RoundedCornerShape(24.dp))
-                    .background(
-                        Brush.linearGradient(
-                            colors = listOf(
-                                MaterialTheme.colorScheme.primary,
-                                MaterialTheme.colorScheme.tertiary
-                            )
-                        )
-                    ),
-                contentAlignment = Alignment.Center
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
             ) {
-                Icon(
-                    imageVector = Icons.Default.LocalHospital,
-                    contentDescription = "Nidanmita Medical Logo",
-                    tint = Color.White,
-                    modifier = Modifier.size(54.dp)
+                Spacer(modifier = Modifier.height(48.dp))
+
+                // App Emblem
+                Box(
+                    modifier = Modifier
+                        .size(96.dp)
+                        .clip(RoundedCornerShape(24.dp))
+                        .background(
+                            Brush.linearGradient(
+                                colors = listOf(
+                                    MaterialTheme.colorScheme.primary,
+                                    MaterialTheme.colorScheme.tertiary
+                                )
+                            )
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.LocalHospital,
+                        contentDescription = "Nidanmitra Medical Logo",
+                        tint = Color.White,
+                        modifier = Modifier.size(54.dp)
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Text(
+                    text = strings.appName,
+                    style = MaterialTheme.typography.headlineLarge,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = MaterialTheme.colorScheme.primary
                 )
-            }
 
-            Spacer(modifier = Modifier.height(16.dp))
+                Text(
+                    text = strings.authSubtitle,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.secondary,
+                    textAlign = TextAlign.Center
+                )
 
-            Text(
-                text = "Nidanmita",
-                style = MaterialTheme.typography.headlineLarge,
-                fontWeight = FontWeight.ExtraBold,
-                color = MaterialTheme.colorScheme.primary
-            )
+                Spacer(modifier = Modifier.height(8.dp))
 
-            Text(
-                text = "Tezpur Healthcare Network",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.secondary
-            )
+                Text(
+                    text = strings.authDescription,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(horizontal = 16.dp)
+                )
 
-            Spacer(modifier = Modifier.height(8.dp))
-
-            Text(
-                text = "Connecting patients across Tezpur with local specialists, rapid ambulance dispatch, diagnostic labs, health insurance, and clinical guidance.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.padding(horizontal = 16.dp)
-            )
-
-            Spacer(modifier = Modifier.height(28.dp))
+                Spacer(modifier = Modifier.height(28.dp))
 
             // Feature Highlights Card
             Card(
@@ -239,7 +249,7 @@ fun AuthScreen(
                         strokeWidth = 2.dp
                     )
                     Spacer(modifier = Modifier.width(12.dp))
-                    Text("Authenticating...")
+                    Text(strings.authenticating)
                 } else {
                     Icon(
                         imageVector = Icons.Default.Lock,
@@ -248,7 +258,7 @@ fun AuthScreen(
                     )
                     Spacer(modifier = Modifier.width(12.dp))
                     Text(
-                        text = "Sign in with Google",
+                        text = strings.signInWithGoogle,
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold
                     )
@@ -264,6 +274,16 @@ fun AuthScreen(
             )
 
             Spacer(modifier = Modifier.height(32.dp))
+            }
+
+            LanguageSelectorButton(
+                selectedLanguage = selectedLanguage,
+                onSelectLanguage = onSelectLanguage,
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .statusBarsPadding()
+                    .padding(horizontal = 16.dp, vertical = 10.dp)
+            )
         }
     }
 }
@@ -361,7 +381,7 @@ private fun performGoogleSignIn(
 
     scope.launch {
         try {
-            val result = credentialManager.getCredential(context as Activity, request)
+            val result = credentialManager.getCredential(context, request)
             val credential = result.credential
             if (credential is CustomCredential && credential.type == TYPE_GOOGLE_ID_TOKEN_CREDENTIAL) {
                 val googleIdToken = GoogleIdTokenCredential.createFrom(credential.data).idToken

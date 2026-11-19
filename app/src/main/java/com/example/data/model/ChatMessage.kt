@@ -1,10 +1,13 @@
 package com.example.data.model
 
+import androidx.annotation.Keep
 import com.google.firebase.Timestamp
 import com.google.firebase.firestore.DocumentId
 import com.google.firebase.firestore.IgnoreExtraProperties
+import com.google.firebase.firestore.PropertyName
 import com.google.firebase.firestore.ServerTimestamp
 
+@Keep
 @IgnoreExtraProperties
 data class ChatMessage(
     @DocumentId val id: String = "",
@@ -15,7 +18,12 @@ data class ChatMessage(
     val recipientId: String = "",
     val recipientName: String = "",
     val message: String = "",
+    @get:PropertyName("isRead")
+    @PropertyName("isRead")
     val isRead: Boolean = false,
     val messageType: String = "TEXT", // TEXT, CLINICAL_UPDATE, PRESCRIPTION
+    val attachmentType: String = "", // "", IMAGE, PDF
+    val attachmentPath: String = "",
+    val attachmentName: String = "",
     @ServerTimestamp val createdAt: Timestamp? = null
 )

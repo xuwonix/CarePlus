@@ -59,6 +59,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import com.example.data.model.FamilyMember
+import com.example.data.model.UserInsurancePolicy
 import com.example.data.model.UserProfile
 import com.example.data.repository.HealthcareCatalog
 import java.io.File
@@ -68,17 +69,40 @@ import java.util.Locale
 
 @Composable
 fun SubmitInsuranceClaimModal(
+    userPolicies: List<UserInsurancePolicy> = emptyList(),
+    preselectedPolicy: UserInsurancePolicy? = null,
+    defaultHospital: String = "Baptist Christian Hospital, Tezpur",
     onDismiss: () -> Unit,
     onConfirm: (policy: String, provider: String, hospital: String, procedure: String, amount: Double, claimType: String, docRef: String) -> Unit
 ) {
-    var policyNumber by remember { mutableStateOf("SH-AS-784210") }
-    var hospitalName by remember { mutableStateOf("Baptist Christian Hospital, Tezpur") }
-    var procedureName by remember { mutableStateOf("Upper GI Endoscopy & Biopsy") }
-    var amountText by remember { mutableStateOf("12500") }
+    val initialPolicy = preselectedPolicy ?: userPolicies.firstOrNull()
+    var selectedPolicyId by remember { mutableStateOf(initialPolicy?.id ?: "") }
+    var insurerName by remember { mutableStateOf(initialPolicy?.insurerName ?: "") }
+    var policyNumber by remember { mutableStateOf(initialPolicy?.policyNumber ?: "") }
+    var hospitalName by remember { mutableStateOf(defaultHospital) }
+    var procedureName by remember { mutableStateOf("") }
+    var amountText by remember { mutableStateOf("") }
+    var claimType by remember { mutableStateOf("CASHLESS") }
+
+    val localHospitals = listOf(
+        "Baptist Christian Hospital, Tezpur",
+        "Tezpur Medical College & Hospital (TMCH)",
+        "Biswanath Chariali Civil Hospital",
+        "Pragati Hospital & Research Centre, Biswanath"
+    )
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Submit Cashless Claim / Pre-Auth", fontWeight = FontWeight.Bold) },
+        title = {
+            Column {
+                Text("Submit Insurance Claim / Pre-Auth", fontWeight = FontWeight.Bold)
+                Text(
+                    text = "File a cashless pre-authorization or reimbursement using your own policy.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        },
         text = {
             Column(
                 modifier = Modifier
@@ -86,31 +110,87 @@ fun SubmitInsuranceClaimModal(
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
+                if (userPolicies.isNotEmpty()) {
+                    Text("Select Your Saved Policy:", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        items(userPolicies) { pol ->
+                            FilterChip(
+                                selected = selectedPolicyId == pol.id,
+                                onClick = {
+                                    selectedPolicyId = pol.id
+                                    insurerName = pol.insurerName
+                                    policyNumber = pol.policyNumber
+                                },
+                                label = { Text("${pol.insurerName} (${pol.policyNumber})", style = MaterialTheme.typography.labelSmall) }
+                            )
+                        }
+                    }
+                } else {
+                    Text(
+                        text = "Tip: Save your policy in Health Insurance Hub so it auto-fills next time.",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf("CASHLESS", "REIMBURSEMENT").forEach { type ->
+                        FilterChip(
+                            selected = claimType == type,
+                            onClick = { claimType = type },
+                            label = { Text(type.lowercase().replaceFirstChar { it.uppercase() }) }
+                        )
+                    }
+                }
+
                 OutlinedTextField(
-                    value = policyNumber,
-                    onValueChange = { policyNumber = it },
-                    label = { Text("Policy ID") },
+                    value = insurerName,
+                    onValueChange = { insurerName = it },
+                    label = { Text("Insurance Company *") },
+                    placeholder = { Text("e.g. Star Health, HDFC ERGO, PM-JAY") },
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp)
                 )
                 OutlinedTextField(
+                    value = policyNumber,
+                    onValueChange = { policyNumber = it },
+                    label = { Text("Policy Number / Card ID *") },
+                    placeholder = { Text("Enter your policy number") },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp)
+                )
+
+                Text("Quick Pick Hospital:", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    items(localHospitals) { hosp ->
+                        FilterChip(
+                            selected = hospitalName == hosp,
+                            onClick = { hospitalName = hosp },
+                            label = { Text(hosp.substringBefore(","), style = MaterialTheme.typography.labelSmall) }
+                        )
+                    }
+                }
+
+                OutlinedTextField(
                     value = hospitalName,
                     onValueChange = { hospitalName = it },
-                    label = { Text("Hospital / Center Name") },
+                    label = { Text("Hospital / Center Name *") },
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp)
                 )
                 OutlinedTextField(
                     value = procedureName,
                     onValueChange = { procedureName = it },
-                    label = { Text("Medical Procedure") },
+                    label = { Text("Medical Procedure / Admission *") },
+                    placeholder = { Text("e.g. Surgery, Hospitalization, Endoscopy") },
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp)
                 )
                 OutlinedTextField(
                     value = amountText,
-                    onValueChange = { amountText = it },
-                    label = { Text("Estimated / Billed Amount (₹)") },
+                    onValueChange = { amountText = it.filter { ch -> ch.isDigit() || ch == '.' } },
+                    label = { Text("Estimated / Billed Amount (₹) *") },
+                    placeholder = { Text("e.g. 15000") },
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp)
                 )
@@ -119,12 +199,21 @@ fun SubmitInsuranceClaimModal(
         confirmButton = {
             Button(
                 onClick = {
-                    val amount = amountText.toDoubleOrNull() ?: 10000.0
-                    onConfirm(policyNumber, "Star Health Assure", hospitalName, procedureName, amount, "CASHLESS", "DOC-REF-${(100..999).random()}")
+                    val amount = amountText.toDoubleOrNull() ?: 0.0
+                    onConfirm(
+                        policyNumber.trim(),
+                        insurerName.trim(),
+                        hospitalName.trim(),
+                        procedureName.trim().ifBlank { "Hospital Admission" },
+                        amount,
+                        claimType,
+                        "DOC-REF-${(100..999).random()}"
+                    )
                 },
+                enabled = insurerName.isNotBlank() && policyNumber.isNotBlank() && hospitalName.isNotBlank() && (amountText.toDoubleOrNull() ?: 0.0) > 0.0,
                 modifier = Modifier.testTag("submit_claim_confirm_button")
             ) {
-                Text("Submit for Pre-Auth")
+                Text("Submit Claim")
             }
         },
         dismissButton = {

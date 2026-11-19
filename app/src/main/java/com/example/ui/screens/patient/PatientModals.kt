@@ -104,7 +104,7 @@ fun AmbulanceDispatchModal(
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 Text(
-                    text = "Tezpur 108 & partner hospital ambulances dispatch immediately with ER pre-alert.",
+                    text = "Tezpur & Biswanath 108 and partner hospital ambulances dispatch immediately with ER pre-alert.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -113,7 +113,7 @@ fun AmbulanceDispatchModal(
                     value = pickupAddress,
                     onValueChange = { pickupAddress = it },
                     label = { Text("Exact Pickup Location / Landmark") },
-                    placeholder = { Text("e.g. Near Mission Chariali, Tezpur") },
+                    placeholder = { Text("e.g. Mission Chariali, Tezpur or Biswanath Chariali") },
                     modifier = Modifier
                         .fillMaxWidth()
                         .testTag("ambulance_pickup_input"),
